@@ -18,11 +18,18 @@ logger = logging.getLogger("ojaq-proxy")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
-TEST_HTML = Path(__file__).resolve().parent.parent / "test_browser" / "index.html"
+_ROOT = Path(__file__).resolve().parent.parent
+TEST_HTML = _ROOT / "test_browser" / "index.html"
+LANDING_HTML = _ROOT / "landing" / "index.html"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 app = FastAPI(title="ojaq-proxy")
+
+
+@app.get("/")
+async def landing_page():
+    return FileResponse(LANDING_HTML, media_type="text/html")
 
 
 @app.get("/test")

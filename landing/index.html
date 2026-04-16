@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ojaq — Presence Intelligence</title>
+<meta name="description" content="An intelligence that listens beneath your words.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #08080c;
+  --text: #e8e8f0;
+  --muted: #666680;
+  --accent: #b8a0ff;
+  --warm: #e8c87a;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── hero ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+canvas#orbs {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 640px;
+  padding: 0 24px;
+}
+
+.logo {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 48px;
+}
+
+h1 {
+  font-size: clamp(32px, 6vw, 56px);
+  font-weight: 300;
+  line-height: 1.2;
+  margin-bottom: 24px;
+  letter-spacing: -0.5px;
+}
+
+h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.subtitle {
+  font-size: clamp(16px, 2.5vw, 20px);
+  font-weight: 300;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 48px;
+}
+
+.cta {
+  display: inline-block;
+  padding: 16px 48px;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: var(--text);
+  border: none;
+  border-radius: 60px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.cta:hover {
+  background: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(184, 160, 255, 0.2);
+}
+
+.scroll-hint {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  opacity: 0.3;
+  animation: drift 2s ease-in-out infinite;
+}
+
+.scroll-hint svg { width: 24px; height: 24px; stroke: var(--text); fill: none; stroke-width: 2; }
+
+@keyframes drift {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(8px); }
+}
+
+/* ── sections ── */
+section {
+  padding: 120px 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 24px;
+}
+
+section h2 {
+  font-size: clamp(24px, 4vw, 40px);
+  font-weight: 300;
+  line-height: 1.3;
+  margin-bottom: 32px;
+}
+
+section p {
+  font-size: 17px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+section p strong {
+  color: var(--text);
+  font-weight: 400;
+}
+
+/* ── how it works ── */
+.steps {
+  display: grid;
+  gap: 48px;
+  margin-top: 64px;
+}
+
+.step {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.step-num {
+  font-size: 48px;
+  font-weight: 200;
+  color: var(--accent);
+  opacity: 0.4;
+  line-height: 1;
+  min-width: 48px;
+}
+
+.step h3 {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.step p {
+  font-size: 15px;
+  margin-bottom: 0;
+}
+
+/* ── presence dimensions ── */
+.dimensions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-top: 48px;
+}
+
+.dim {
+  padding: 24px;
+  border: 1px solid #1a1a24;
+  border-radius: 12px;
+  background: #0c0c14;
+}
+
+.dim-name {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.dim p {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+/* ── quote ── */
+.quote-section {
+  text-align: center;
+  padding: 160px 24px;
+}
+
+.quote {
+  font-size: clamp(22px, 4vw, 36px);
+  font-weight: 300;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--text);
+  max-width: 640px;
+  margin: 0 auto 24px;
+}
+
+.quote-attr {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ── waitlist ── */
+.waitlist {
+  text-align: center;
+  padding: 120px 24px 160px;
+}
+
+.waitlist h2 {
+  margin-bottom: 16px;
+}
+
+.waitlist p {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.email-form {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.email-form input {
+  font-family: inherit;
+  font-size: 16px;
+  padding: 14px 24px;
+  border-radius: 60px;
+  border: 1px solid #2a2a36;
+  background: #0c0c14;
+  color: var(--text);
+  width: 300px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.email-form input:focus {
+  border-color: var(--accent);
+}
+
+.email-form button {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 14px 36px;
+  border-radius: 60px;
+  border: none;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.email-form button:hover {
+  background: var(--accent);
+}
+
+.email-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 16px;
+}
+
+/* ── footer ── */
+footer {
+  text-align: center;
+  padding: 48px 24px;
+  font-size: 13px;
+  color: #333;
+  border-top: 1px solid #111;
+}
+
+/* ── responsive ── */
+@media (max-width: 600px) {
+  section { padding: 80px 20px; }
+  .step { flex-direction: column; gap: 8px; }
+  .step-num { font-size: 36px; }
+  .email-form input { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── hero ── -->
+<div class="hero">
+  <canvas id="orbs"></canvas>
+  <div class="hero-content">
+    <div class="logo">Ojaq</div>
+    <h1>An intelligence that listens <em>beneath</em> your words</h1>
+    <p class="subtitle">Real-time voice conversations with presence awareness. Not therapy. Not coaching. Something new.</p>
+    <a href="/playground" class="cta">Experience Ojaq</a>
+  </div>
+  <div class="scroll-hint">
+    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+  </div>
+</div>
+
+<!-- ── what ── -->
+<section>
+  <div class="section-label">What this is</div>
+  <h2>Most conversations happen on the surface. Ojaq goes underneath.</h2>
+  <p>You speak. Ojaq listens — not just to your words, but to what's alive beneath them. <strong>The energy. The hesitation. The thing you almost said but didn't.</strong></p>
+  <p>When it speaks back, it's rarely and precisely. One sentence. Two at most. Only reflections so accurate they feel uncanny.</p>
+  <p>A living avatar breathes with your emotional state in real-time — showing you what you might not see in yourself.</p>
+</section>
+
+<!-- ── how ── -->
+<section>
+  <div class="section-label">How it works</div>
+  <h2>Three layers, running simultaneously</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <h3>Voice</h3>
+        <p>Real-time voice conversation. Low latency. No typing. You talk like you would with someone who's really listening.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <h3>Presence intelligence</h3>
+        <p>Every turn, Ojaq reads your presence — energy, confidence, resistance, engagement, congruence, sentiment. Not what you said. How you are.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <h3>Living mirror</h3>
+        <p>An avatar responds to your presence in real-time. It doesn't represent Ojaq. It represents you — your state, your shifts, your alive edges.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── presence ── -->
+<section>
+  <div class="section-label">Presence dimensions</div>
+  <h2>What Ojaq tracks beneath the conversation</h2>
+  <div class="dimensions">
+    <div class="dim">
+      <div class="dim-name">Energy</div>
+      <p>How alive and activated you sound. The difference between going through motions and being in it.</p>
+    </div>
+    <div class="dim">
+      <div class="dim-name">Confidence</div>
+      <p>How certain and assured. Not bravado — real ground beneath your words.</p>
+    </div>
+    <div class="dim">
+      <div class="dim-name">Resistance</div>
+      <p>Defensiveness. Avoidance. The guard that goes up when something gets close.</p>
+    </div>
+    <div class="dim">
+      <div class="dim-name">Engagement</div>
+      <p>How present you are. The difference between talking about something and being in it.</p>
+    </div>
+    <div class="dim">
+      <div class="dim-name">Congruence</div>
+      <p>Alignment between words and tone. When what you say matches how you feel — and when it doesn't.</p>
+    </div>
+    <div class="dim">
+      <div class="dim-name">Signal</div>
+      <p>One sentence. The most specific, honest observation about what's really happening right now.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── quote ── -->
+<div class="quote-section">
+  <p class="quote">"The quality of your life is the quality of your attention."</p>
+</div>
+
+<!-- ── frameworks ── -->
+<section>
+  <div class="section-label">Session frameworks</div>
+  <h2>Different lenses on the same intelligence</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num" style="color: var(--warm);">C</div>
+      <div>
+        <h3>Coaching</h3>
+        <p>Asks the question you haven't asked yourself. Finds the smallest next step. Challenges gently when you're avoiding.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num" style="color: #88bbdd;">S</div>
+      <div>
+        <h3>Self-Discovery</h3>
+        <p>A mirror. Never asks. Never advises. Only names what it observes. "There's something careful about how you said that."</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num" style="color: #88dd99;">T</div>
+      <div>
+        <h3>Therapy</h3>
+        <p>Holds space. Validates before exploring. When resistance rises, softens. When engagement drops, waits. Healing in safety, not pressure.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num" style="color: #ddaa88;">F</div>
+      <div>
+        <h3>Friend</h3>
+        <p>Someone who actually listens. Can joke. Can call you out. Gets quiet when something's heavy. Just real.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── memory ── -->
+<section>
+  <div class="section-label">Memory</div>
+  <h2>It remembers who you are becoming</h2>
+  <p>Not facts. <strong>Patterns.</strong> What raises your energy. What you keep circling back to. Where you opened up for the first time. What you're avoiding.</p>
+  <p>Session after session, the relationship deepens. Early sessions listen broadly. Later sessions can name harder things — because trust is earned, not assumed.</p>
+</section>
+
+<!-- ── waitlist ── -->
+<div class="waitlist">
+  <div class="section-label">Early access</div>
+  <h2>Be among the first</h2>
+  <p>Ojaq is in development. Join the waitlist for early access.</p>
+  <form class="email-form" id="waitlist-form">
+    <input type="email" placeholder="your@email.com" required id="email-input">
+    <button type="submit">Join waitlist</button>
+  </form>
+  <p class="email-note" id="form-note">No spam. One email when it's ready.</p>
+</div>
+
+<footer>Ojaq &mdash; Presence Intelligence</footer>
+
+<!-- ── orb animation ── -->
+<script>
+const canvas = document.getElementById('orbs');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = canvas.offsetWidth * devicePixelRatio;
+  H = canvas.height = canvas.offsetHeight * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+resize();
+window.addEventListener('resize', resize);
+
+class Orb {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    const w = canvas.offsetWidth, h = canvas.offsetHeight;
+    this.x = w * 0.3 + Math.random() * w * 0.4;
+    this.y = h * 0.3 + Math.random() * h * 0.4;
+    this.r = 6 + Math.random() * 20;
+    this.phase = Math.random() * Math.PI * 2;
+    this.speed = 0.3 + Math.random() * 0.7;
+    this.orbit = 30 + Math.random() * 80;
+    this.hue = 240 + Math.random() * 40;  // blue-purple range
+    this.alpha = 0.15 + Math.random() * 0.25;
+  }
+}
+
+const orbs = Array.from({ length: 14 }, () => new Orb());
+let t = 0;
+let mouseX = 0.5, mouseY = 0.5;
+
+document.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX / window.innerWidth;
+  mouseY = e.clientY / window.innerHeight;
+});
+
+function draw() {
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  ctx.clearRect(0, 0, w, h);
+  t += 0.003;
+
+  const cx = w * (0.45 + mouseX * 0.1);
+  const cy = h * (0.45 + mouseY * 0.1);
+
+  for (const o of orbs) {
+    o.phase += o.speed * 0.008;
+
+    // Gentle orbit around center
+    const tx = cx + Math.cos(o.phase) * o.orbit;
+    const ty = cy + Math.sin(o.phase * 0.7) * o.orbit * 0.6;
+    o.x += (tx - o.x) * 0.015;
+    o.y += (ty - o.y) * 0.015;
+
+    // Breathing
+    const breathe = 1 + Math.sin(t * 2 + o.phase) * 0.15;
+    const r = o.r * breathe;
+
+    // Draw
+    const grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, r * 3);
+    grad.addColorStop(0, `hsla(${o.hue}, 40%, 70%, ${o.alpha})`);
+    grad.addColorStop(0.5, `hsla(${o.hue}, 40%, 60%, ${o.alpha * 0.3})`);
+    grad.addColorStop(1, `hsla(${o.hue}, 40%, 50%, 0)`);
+
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, r * 3, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Core
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, r * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${o.hue}, 30%, 80%, ${o.alpha * 0.8})`;
+    ctx.fill();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+
+// Waitlist form
+document.getElementById('waitlist-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email-input').value;
+  // Store locally for now — replace with actual backend
+  const list = JSON.parse(localStorage.getItem('ojaq_waitlist') || '[]');
+  list.push({ email, date: new Date().toISOString() });
+  localStorage.setItem('ojaq_waitlist', JSON.stringify(list));
+  document.getElementById('email-input').value = '';
+  document.getElementById('form-note').textContent = "You're in. We'll be in touch.";
+  document.getElementById('form-note').style.color = '#b8a0ff';
+});
+</script>
+</body>
+</html>
