@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ojaq — Playground</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── framework tabs ── -->
+<nav id="tabs"></nav>
+
+<!-- ── main area ── -->
+<main>
+  <!-- ── left: avatar ── -->
+  <div id="avatar-panel">
+    <div id="avatar-wrap"><canvas id="avatar-canvas"></canvas></div>
+    <div id="emotion-badge"><span id="emotion-name">neutral</span> <span id="emotion-val">0</span></div>
+    <div id="signal"></div>
+    <div id="phase-mode">
+      <span id="phase-tag">arrival</span>
+      <span id="mode-tag">reflect</span>
+    </div>
+  </div>
+
+  <!-- ── right: sidebar ── -->
+  <aside id="sidebar">
+    <div id="transcripts">
+      <div class="t-block">
+        <div class="t-label">you</div>
+        <div id="t-user" class="t-text"></div>
+      </div>
+      <div class="t-block">
+        <div class="t-label">ojaq</div>
+        <div id="t-model" class="t-text"></div>
+      </div>
+    </div>
+
+    <div id="sparklines">
+      <div class="spark" data-dim="energy"><span class="spark-label">energy</span><canvas class="spark-canvas" width="160" height="32"></canvas></div>
+      <div class="spark" data-dim="confidence"><span class="spark-label">confidence</span><canvas class="spark-canvas" width="160" height="32"></canvas></div>
+      <div class="spark" data-dim="resistance"><span class="spark-label">resistance</span><canvas class="spark-canvas" width="160" height="32"></canvas></div>
+      <div class="spark" data-dim="engagement"><span class="spark-label">engagement</span><canvas class="spark-canvas" width="160" height="32"></canvas></div>
+      <div class="spark" data-dim="congruence"><span class="spark-label">congruence</span><canvas class="spark-canvas" width="160" height="32"></canvas></div>
+    </div>
+
+    <div id="timer">00:00</div>
+  </aside>
+</main>
+
+<!-- ── controls ── -->
+<footer id="controls">
+  <button id="btn">Start</button>
+  <input id="cmd-input" type="text" placeholder="[CMD:focus:career]" disabled>
+  <button id="cmd-send" disabled>Send</button>
+  <div id="quick-cmds">
+    <button data-cmd="[CMD:focus:career]">Career</button>
+    <button data-cmd="[CMD:focus:relationships]">Relationships</button>
+    <button data-cmd="[CMD:focus:health]">Health</button>
+    <button data-cmd="[CMD:wrap-up]">Wrap Up</button>
+  </div>
+</footer>
+
+<div id="log"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

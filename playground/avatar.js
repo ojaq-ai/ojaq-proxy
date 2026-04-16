@@ -1,0 +1,156 @@
+// ── Avatar: Living Orb System ───────────────────────────────────────────
+// Two layers: user presence → texture, Ojaq mode → behavior, depth → cohesion
+
+function map(v, lo, hi, oLo, oHi) {
+  return oLo + ((v - lo) / (hi - lo)) * (oHi - oLo);
+}
+
+const MODE_CONFIG = {
+  hold:      { speedMul: 0.3, cohesionMul: 0.8, brightMul: 0.7 },
+  reflect:   { speedMul: 1.0, cohesionMul: 1.0, brightMul: 1.0 },
+  challenge: { speedMul: 1.2, cohesionMul: 1.3, brightMul: 1.1 },
+  celebrate: { speedMul: 1.5, cohesionMul: 0.7, brightMul: 1.5 },
+  sit:       { speedMul: 0.4, cohesionMul: 1.2, brightMul: 0.5 },
+};
+
+class Orb {
+  constructor(cx, cy) {
+    this.x = cx + (Math.random() - 0.5) * 120;
+    this.y = cy + (Math.random() - 0.5) * 120;
+    this.vx = 0;
+    this.vy = 0;
+    this.baseR = 6 + Math.random() * 14;
+    this.phase = Math.random() * Math.PI * 2;
+    this.orbitR = 20 + Math.random() * 60;
+  }
+
+  update(cx, cy, params) {
+    const { speed, cohesion, angularity, brightness, harmony, warmth, depth } = params;
+
+    // Pull toward center
+    const dx = cx - this.x, dy = cy - this.y;
+    const pull = cohesion * 0.025;
+    this.vx += dx * pull;
+    this.vy += dy * pull;
+
+    // Orbital
+    this.phase += speed * 0.015;
+    this.vx += Math.cos(this.phase) * harmony * 0.4;
+    this.vy += Math.sin(this.phase * 0.7) * harmony * 0.4;
+
+    this.vx *= 0.93;
+    this.vy *= 0.93;
+    this.x += this.vx * speed;
+    this.y += this.vy * speed;
+
+    // Store render params
+    this._r = this.baseR * (0.7 + depth * 0.5);
+    this._brightness = brightness;
+    this._warmth = warmth;
+    this._angularity = angularity;
+  }
+
+  draw(ctx, t) {
+    const r = this._r * (1 + Math.sin(t * 2 + this.phase) * 0.12);
+    const hue = this._warmth * 40 + (1 - this._warmth) * 240;
+    const sat = 35 + this._warmth * 25;
+    const alpha = this._brightness * 0.5;
+
+    // Glow
+    const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 3);
+    grad.addColorStop(0, `hsla(${hue}, ${sat}%, 70%, ${alpha})`);
+    grad.addColorStop(0.5, `hsla(${hue}, ${sat}%, 60%, ${alpha * 0.2})`);
+    grad.addColorStop(1, `hsla(${hue}, ${sat}%, 50%, 0)`);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, r * 3, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Core
+    ctx.beginPath();
+    if (this._angularity > 0.6) {
+      const sides = 4 + Math.floor((1 - this._angularity) * 5);
+      for (let i = 0; i <= sides; i++) {
+        const a = (i / sides) * Math.PI * 2 + this.phase * 0.3;
+        const px = this.x + Math.cos(a) * r;
+        const py = this.y + Math.sin(a) * r;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    } else {
+      ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = `hsla(${hue}, ${sat - 10}%, 75%, ${alpha * 0.7})`;
+    ctx.fill();
+  }
+}
+
+export class Avatar {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.target = { energy: 0, confidence: 50, resistance: 0, engagement: 30, congruence: 50, sentiment: 0 };
+    this.current = { ...this.target };
+    this.mode = 'reflect';
+    this.depth = 0;
+    this.t = 0;
+    this.orbs = [];
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+    this._animate();
+  }
+
+  _resize() {
+    const rect = this.canvas.parentElement.getBoundingClientRect();
+    const s = Math.min(rect.width, rect.height, 400);
+    this.canvas.width = s * devicePixelRatio;
+    this.canvas.height = s * devicePixelRatio;
+    this.canvas.style.width = s + 'px';
+    this.canvas.style.height = s + 'px';
+    this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    this.w = s;
+    this.h = s;
+    const cx = s / 2, cy = s / 2;
+    if (this.orbs.length === 0) {
+      this.orbs = Array.from({ length: 12 }, () => new Orb(cx, cy));
+    }
+  }
+
+  setPresence(p) { this.target = { ...p }; }
+  setMode(m) { this.mode = m; }
+  setDepth(d) { this.depth = d; }
+
+  _animate() {
+    this.t += 0.008;
+
+    // Smooth interpolation
+    for (const k of Object.keys(this.target)) {
+      if (typeof this.current[k] === 'number') {
+        this.current[k] += (this.target[k] - this.current[k]) * 0.04;
+      }
+    }
+
+    const { energy, confidence, resistance, engagement, congruence, sentiment } = this.current;
+    const mc = MODE_CONFIG[this.mode] || MODE_CONFIG.reflect;
+
+    const params = {
+      speed:      map(energy, 0, 100, 0.3, 2.0) * mc.speedMul,
+      cohesion:   map(confidence, 0, 100, 0.15, 1.0) * mc.cohesionMul * (0.5 + this.depth * 0.5),
+      angularity: map(resistance, 0, 100, 0, 1),
+      brightness: map(engagement, 0, 100, 0.25, 1.0) * mc.brightMul,
+      harmony:    map(congruence, 0, 100, 0, 1),
+      warmth:     map(sentiment, -1, 1, 0, 1),
+      depth:      this.depth,
+    };
+
+    const cx = this.w / 2, cy = this.h / 2;
+
+    this.ctx.clearRect(0, 0, this.w, this.h);
+    for (const orb of this.orbs) {
+      orb.update(cx, cy, params);
+      orb.draw(this.ctx, this.t);
+    }
+
+    requestAnimationFrame(() => this._animate());
+  }
+}

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 from gemini_live import GeminiLiveSession
@@ -106,6 +107,11 @@ async def ws_endpoint(ws: WebSocket):
         except Exception:
             pass
         logger.info("Session ended")
+
+
+# Static mount for playground (must come after all route definitions)
+PLAYGROUND = _ROOT / "playground"
+app.mount("/playground", StaticFiles(directory=PLAYGROUND, html=True), name="playground")
 
 
 if __name__ == "__main__":
