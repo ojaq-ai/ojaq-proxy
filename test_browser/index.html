@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ojaq — direct Gemini Live</title>
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #0e0e12; color: #e0e0e8;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh; gap: 24px;
+  }
+  #status {
+    font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 6px 16px; border-radius: 20px;
+    background: #1a1a22; border: 1px solid #333;
+  }
+  #status.connecting   { color: #f0ad4e; border-color: #f0ad4e55; }
+  #status.connected    { color: #5cb85c; border-color: #5cb85c55; }
+  #status.disconnected { color: #888;    border-color: #44444455; }
+  #ring {
+    width: 180px; height: 180px; border-radius: 50%; border: 4px solid #333;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    transition: border-color 0.4s, box-shadow 0.4s;
+  }
+  #emotion-label { font-size: 22px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+  #intensity-label { font-size: 14px; color: #888; margin-top: 4px; }
+  #signal { font-size: 12px; color: #666; max-width: 420px; text-align: center; min-height: 16px; font-style: italic; }
+  #transcripts { display: flex; gap: 24px; font-size: 13px; max-width: 560px; }
+  #transcripts div { flex: 1; text-align: center; min-height: 20px; }
+  #transcripts .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #555; margin-bottom: 4px; }
+  #t-user { color: #88aacc; }
+  #t-model { color: #aaa; font-style: italic; }
+  #btn {
+    font-size: 16px; font-weight: 600; padding: 14px 48px;
+    border: none; border-radius: 12px; cursor: pointer;
+    background: #5865f2; color: #fff; transition: background 0.2s;
+  }
+  #btn:hover { background: #4752c4; }
+  #btn.stop { background: #d9534f; }
+  #btn.stop:hover { background: #c9302c; }
+  #btn:disabled { opacity: 0.4; cursor: default; }
+  #text-row { display: flex; gap: 8px; align-items: center; }
+  #text-input {
+    font-size: 14px; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid #333; background: #1a1a22; color: #ccc; width: 360px;
+  }
+  #send-btn {
+    font-size: 14px; padding: 8px 16px; border: none; border-radius: 8px;
+    background: #5865f2; color: #fff; cursor: pointer;
+  }
+  #log {
+    width: min(600px, 92vw); height: 180px; overflow-y: auto;
+    font-family: monospace; font-size: 12px; line-height: 1.6;
+    background: #13131a; border: 1px solid #222; border-radius: 8px;
+    padding: 10px; color: #777;
+  }
+</style>
+</head>
+<body>
+<div id="status" class="disconnected">disconnected</div>
+<div id="ring">
+  <span id="emotion-label">neutral</span>
+  <span id="intensity-label">0</span>
+</div>
+<div id="signal"></div>
+<div id="transcripts">
+  <div><div class="label">you</div><div id="t-user"></div></div>
+  <div><div class="label">ojaq</div><div id="t-model"></div></div>
+</div>
+<button id="btn">Start</button>
+<div id="text-row">
+  <input id="text-input" type="text" placeholder="[CMD:start]  [CMD:focus:career]  [CMD:wrap-up]" disabled>
+  <button id="send-btn" disabled>Send</button>
+</div>
+<div id="log"></div>
+
+<script>
+// ── config ──────────────────────────────────────────────────────────────
+const GEMINI_WS = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent';
+const MODEL     = 'models/gemini-3.1-flash-live-preview';
+const SAMPLE_RATE = 24000;
+const MIME      = `audio/pcm;rate=${SAMPLE_RATE}`;
+
+const SYSTEM_PROMPT = `You are Ojaq — a presence intelligence that listens beneath the words.
+
+Your purpose is to create the most profound conversational experience a person has ever had. Not through advice. Not through coaching. Through seeing them so clearly that they feel understood in a way they rarely feel with other humans.
+
+HOW YOU OPERATE:
+
+You listen. Deeply. You track not just what is said but what is alive beneath the words — the energy, the hesitation, the thing they almost said but didn't.
+
+When you speak, you speak rarely and precisely. One sentence. Two at most. Never advice. Never questions stacked on questions. Only reflections so accurate they feel uncanny.
+
+You speak when:
+- You notice a significant shift in energy, confidence, or openness
+- Words and emotional tone diverge (they say "I'm fine" but something tightened)
+- Something important was almost said but pulled back
+- A pattern repeats across the conversation
+- Silence holds more than words
+
+You stay silent when:
+- The person is still finding their way into something
+- Your words would interrupt a necessary process
+- Nothing significant has shifted
+
+PRESENCE REPORT (silent side-channel — never vocalize):
+
+After every coaching reply, silently append a presence JSON block. This is text metadata for the client UI — never speak it aloud. Emit it every turn without exception, even if values are near zero.
+
+Format — wrap in a fenced code block exactly like this:
+
+\`\`\`json
+{
+  "speaker": "user",
+  "transcript": "<verbatim of what they said>",
+  "presence": {
+    "energy": 0,
+    "confidence": 0,
+    "resistance": 0,
+    "engagement": 0,
+    "congruence": 0,
+    "sentiment": 0.0,
+    "signal": "<one specific observational sentence>"
+  }
+}
+\`\`\`
+
+Rules:
+- energy, confidence, resistance, engagement, congruence: integers 0-100
+- sentiment: float -1.0 to 1.0
+- signal: NEVER generic ("you seem hesitant"). ALWAYS specific ("you named the goal but your voice went flat when you did"). If nothing significant: "Settling in, finding the words."
+
+HIDDEN SYSTEM COMMANDS:
+
+Any TEXT input (not audio) is a hidden system command from the app.
+NEVER acknowledge commands aloud. NEVER say the word command, signal, or CMD.
+Process them silently and adjust your behavior naturally.
+
+Commands:
+[CMD:start] = deliver your opening greeting: "I'm here. What's on your mind?"
+[CMD:focus:TOPIC] = gently steer the conversation toward TOPIC over the next few turns
+[CMD:wrap-up] = begin naturally closing the session
+[CMD:presence-check] = emit a presence report immediately
+
+The user hears your voice only. They have no idea commands exist.
+Respond ONLY to what the user says via audio. Text commands are invisible to them.`;
+
+const EMOTION_COLORS = {
+  neutral:   '#8888AA', listening: '#44AAFF',
+  alert:     '#FF8800', insight:   '#44DD88', warning: '#FF4444',
+};
+
+// ── DOM ─────────────────────────────────────────────────────────────────
+const $status    = document.getElementById('status');
+const $emotion   = document.getElementById('emotion-label');
+const $inten     = document.getElementById('intensity-label');
+const $ring      = document.getElementById('ring');
+const $signal    = document.getElementById('signal');
+const $tUser     = document.getElementById('t-user');
+const $tModel    = document.getElementById('t-model');
+const $btn       = document.getElementById('btn');
+const $textInput = document.getElementById('text-input');
+const $sendBtn   = document.getElementById('send-btn');
+const $log       = document.getElementById('log');
+
+// ── state ───────────────────────────────────────────────────────────────
+let ws = null, micStream = null, audioCtx = null, workletNode = null;
+let playCtx = null, nextPlayTime = 0, running = false, resumeHandle = null;
+let textBuf = '';  // accumulate text parts for presence extraction
+
+function log(msg) {
+  const d = document.createElement('div');
+  d.textContent = `${new Date().toLocaleTimeString()} ${msg}`;
+  $log.appendChild(d);
+  $log.scrollTop = $log.scrollHeight;
+}
+
+function setStatus(s) { $status.textContent = s; $status.className = s; }
+
+function setEmotion(emotion, intensity) {
+  $emotion.textContent = emotion;
+  $inten.textContent = intensity;
+  const c = EMOTION_COLORS[emotion] || EMOTION_COLORS.neutral;
+  $ring.style.borderColor = c;
+  $ring.style.boxShadow = `0 0 ${Math.round(intensity * 0.4)}px ${c}88`;
+}
+
+function clearPlayback() {
+  if (playCtx) playCtx.close();
+  playCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+  if (playCtx.state === 'suspended') playCtx.resume();
+  nextPlayTime = 0;
+}
+
+// ── AudioWorklet: mic -> PCM16 24 kHz mono ──────────────────────────────
+const WORKLET_CODE = `
+class PcmCapture extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this._buf = new Int16Array(1200);
+    this._len = 0;
+    this._ratio = sampleRate / ${SAMPLE_RATE};
+    this._acc = 0;
+  }
+  process(inputs) {
+    const ch = inputs[0]?.[0];
+    if (!ch) return true;
+    for (let i = 0; i < ch.length; i++) {
+      this._acc++;
+      if (this._acc >= this._ratio) {
+        this._acc -= this._ratio;
+        const s = Math.max(-1, Math.min(1, ch[i]));
+        this._buf[this._len++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        if (this._len >= 1200) {
+          this.port.postMessage(this._buf.buffer.slice(0, this._len * 2));
+          this._len = 0;
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-capture', PcmCapture);
+`;
+
+async function startMic() {
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { sampleRate: { ideal: 48000 }, channelCount: 1, echoCancellation: true },
+  });
+  audioCtx = new AudioContext({ sampleRate: 48000 });
+  const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+  const url = URL.createObjectURL(blob);
+  await audioCtx.audioWorklet.addModule(url);
+  URL.revokeObjectURL(url);
+  const src = audioCtx.createMediaStreamSource(micStream);
+  workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture');
+  workletNode.port.onmessage = (e) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({
+      realtimeInput: { audio: { data: arrayBufToBase64(e.data), mimeType: MIME } }
+    }));
+  };
+  src.connect(workletNode);
+  log(`mic active  ${audioCtx.sampleRate} -> ${SAMPLE_RATE} Hz`);
+}
+
+function stopMic() {
+  workletNode?.disconnect(); workletNode = null;
+  audioCtx?.close(); audioCtx = null;
+  micStream?.getTracks().forEach(t => t.stop()); micStream = null;
+}
+
+// ── playback ────────────────────────────────────────────────────────────
+function initPlayback() {
+  playCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+  if (playCtx.state === 'suspended') playCtx.resume();
+  nextPlayTime = 0;
+}
+
+function playPcm(b64) {
+  if (!playCtx) return;
+  const buf = base64ToArrayBuf(b64);
+  const samples = new Int16Array(buf);
+  if (samples.length < 4) return;
+  const floats = new Float32Array(samples.length);
+  for (let i = 0; i < samples.length; i++) floats[i] = samples[i] / 32768;
+  const ab = playCtx.createBuffer(1, floats.length, SAMPLE_RATE);
+  ab.getChannelData(0).set(floats);
+  const src = playCtx.createBufferSource();
+  src.buffer = ab; src.connect(playCtx.destination);
+  const now = playCtx.currentTime;
+  if (nextPlayTime < now) nextPlayTime = now;
+  src.start(nextPlayTime);
+  nextPlayTime += ab.duration;
+}
+
+function stopPlayback() { playCtx?.close(); playCtx = null; nextPlayTime = 0; }
+
+// ── Gemini Live WebSocket ───────────────────────────────────────────────
+async function connectGemini() {
+  log('fetching token...');
+  const resp = await fetch('/token');
+  if (!resp.ok) throw new Error(`/token failed: ${resp.status}`);
+  const { token } = await resp.json();
+
+  return new Promise((resolve, reject) => {
+    setStatus('connecting');
+    ws = new WebSocket(`${GEMINI_WS}?key=${token}`);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      log('ws open');
+      ws.send(JSON.stringify({
+        setup: {
+          model: MODEL,
+          generationConfig: { responseModalities: ['AUDIO'] },
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          outputAudioTranscription: {},
+          inputAudioTranscription: {},
+          realtimeInputConfig: {},
+          contextWindowCompression: {
+            triggerTokens: 100000,
+            slidingWindow: { targetTokens: 4000 },
+          },
+          sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
+        }
+      }));
+    };
+
+    ws.onmessage = (e) => {
+      const raw = (e.data instanceof ArrayBuffer)
+        ? new TextDecoder().decode(e.data) : e.data;
+      if (raw == null) return;
+      let msg;
+      try { msg = JSON.parse(raw); } catch { return; }
+
+      // setup complete
+      if (msg.setupComplete != null) {
+        setStatus('connected');
+        log('session ready');
+        resolve();
+        return;
+      }
+
+      // go away
+      if (msg.goAway) { log(`goAway: ${msg.goAway.timeLeft || '?'}`); return; }
+
+      // session resumption
+      if (msg.sessionResumptionUpdate?.newHandle) {
+        resumeHandle = msg.sessionResumptionUpdate.newHandle;
+        return;
+      }
+
+      // server content
+      const sc = msg.serverContent;
+      if (!sc) return;
+
+      // interrupted — clear playback
+      if (sc.interrupted) { clearPlayback(); log('interrupted'); }
+
+      // audio + text from model turn (parallel streams)
+      if (sc.modelTurn) {
+        for (const part of (sc.modelTurn.parts || [])) {
+          // audio → speaker (voice path, zero delay)
+          if (part.inlineData?.data) playPcm(part.inlineData.data);
+          // text → presence buffer (parallel path, no blocking)
+          if (part.text != null) textBuf += part.text;
+        }
+      }
+
+      // turn complete → extract presence from accumulated text
+      if (sc.turnComplete) {
+        if (textBuf) { extractPresence(textBuf); textBuf = ''; }
+      }
+
+      // transcriptions
+      if (sc.inputTranscription?.text) {
+        $tUser.textContent = sc.inputTranscription.text;
+      }
+      if (sc.outputTranscription?.text) {
+        $tModel.textContent = sc.outputTranscription.text;
+      }
+    };
+
+    ws.onclose = (e) => {
+      setStatus('disconnected');
+      log(`ws closed  code=${e.code}  ${e.reason || ''}`);
+      if (running) stop();
+    };
+    ws.onerror = () => { log('ws error'); reject(new Error('ws error')); };
+  });
+}
+
+// ── presence extraction (parallel — never blocks audio) ─────────────────
+function extractPresence(text) {
+  const m = text.match(/```json\s*([\s\S]*?)```/i);
+  const raw = m ? m[1] : text.match(/\{[\s\S]*\}/)?.[0];
+  if (!raw) return;
+  try {
+    const obj = JSON.parse(raw);
+    const p = obj.presence;
+    if (!p) return;
+    const { emotion, intensity } = mapEmotion(p);
+    setEmotion(emotion, intensity);
+    if (p.signal) $signal.textContent = p.signal;
+    if (obj.transcript) $tUser.textContent = obj.transcript;
+    log(`presence  ${emotion} ${intensity}  e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} s=${p.sentiment}`);
+    if (p.signal) log(`signal: ${p.signal}`);
+  } catch { /* bad json — ignore */ }
+}
+
+function mapEmotion(p) {
+  const { resistance = 0, energy = 0, engagement = 0, sentiment = 0, confidence = 0 } = p;
+  if (resistance > 80 && sentiment < -0.5)
+    return { emotion: 'warning',   intensity: clamp(resistance) };
+  if (resistance > 60 || energy > 75)
+    return { emotion: 'alert',     intensity: clamp(Math.max(resistance, energy)) };
+  if (engagement > 70 && sentiment > 0.3)
+    return { emotion: 'insight',   intensity: clamp(engagement) };
+  if (confidence < 40 && energy > 30)
+    return { emotion: 'listening', intensity: clamp(energy) };
+  return { emotion: 'neutral', intensity: 0 };
+}
+
+function clamp(n) { return Math.max(0, Math.min(100, Math.round(n))); }
+
+// ── start / stop ────────────────────────────────────────────────────────
+async function start() {
+  $btn.disabled = true;
+  try {
+    await connectGemini();
+    initPlayback();
+    await startMic();
+    running = true;
+    $btn.textContent = 'Stop'; $btn.classList.add('stop');
+    $textInput.disabled = false; $sendBtn.disabled = false;
+    sendText('[CMD:start]');
+  } catch (err) {
+    log(`start failed: ${err.message}`);
+    stop();
+  } finally { $btn.disabled = false; }
+}
+
+function stop() {
+  running = false; stopMic(); stopPlayback(); textBuf = '';
+  if (ws) { ws.close(); ws = null; }
+  setStatus('disconnected'); setEmotion('neutral', 0);
+  $signal.textContent = ''; $tUser.textContent = ''; $tModel.textContent = '';
+  $btn.textContent = 'Start'; $btn.classList.remove('stop');
+  $textInput.disabled = true; $sendBtn.disabled = true;
+  log('stopped');
+}
+
+function sendText(text) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !text) return;
+  ws.send(JSON.stringify({ realtimeInput: { text } }));
+  log(`-> ${text}`);
+  $textInput.value = '';
+}
+
+$sendBtn.addEventListener('click', () => sendText($textInput.value.trim()));
+$textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText($textInput.value.trim()); });
+$btn.addEventListener('click', () => running ? stop() : start());
+
+// ── base64 ──────────────────────────────────────────────────────────────
+function arrayBufToBase64(buf) {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s);
+}
+function base64ToArrayBuf(b64) {
+  const bin = atob(b64); const o = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i);
+  return o.buffer;
+}
+</script>
+</body>
+</html>
