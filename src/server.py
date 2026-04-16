@@ -4,10 +4,11 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+import httpx
 
 from gemini_live import GeminiLiveSession
 
@@ -44,6 +45,62 @@ async def get_token():
     if not GEMINI_API_KEY:
         return {"error": "GEMINI_API_KEY not set"}, 500
     return {"token": GEMINI_API_KEY}
+
+
+ANALYZE_PROMPT = """\
+Analyze the emotional presence in this conversation turn.
+User said: "{user_text}"
+Coach said: "{model_text}"
+
+Return ONLY a JSON object with these fields:
+- energy (0-100): how activated/alive the user sounds
+- confidence (0-100): how assured
+- resistance (0-100): defensiveness or avoidance
+- engagement (0-100): how present and involved
+- congruence (0-100): alignment between words and tone
+- sentiment (-1.0 to 1.0): emotional valence
+- signal (string): one specific observational sentence about what is really happening beneath the words. Never generic.
+
+JSON only, no markdown, no explanation."""
+
+GEMINI_REST_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-2.5-flash:generateContent"
+)
+
+_http = httpx.AsyncClient(timeout=10)
+
+
+@app.post("/analyze")
+async def analyze_presence(request: Request):
+    body = await request.json()
+    user_text = body.get("user", "")
+    model_text = body.get("model", "")
+    if not user_text:
+        return JSONResponse({"error": "no user text"}, 400)
+
+    prompt = ANALYZE_PROMPT.format(user_text=user_text, model_text=model_text)
+    try:
+        resp = await _http.post(
+            f"{GEMINI_REST_URL}?key={GEMINI_API_KEY}",
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.2},
+            },
+        )
+        data = resp.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        # Strip markdown fences if present
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        presence = json.loads(text.strip())
+        return presence
+    except Exception as e:
+        logger.error(f"Presence analysis failed: {e}")
+        return JSONResponse({"error": str(e)}, 500)
 
 
 @app.websocket("/ws")

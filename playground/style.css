@@ -149,43 +149,68 @@ main {
   margin-bottom: 4px;
 }
 .t-text {
-  font-size: 14px;
-  line-height: 1.5;
-  min-height: 24px;
+  font-size: 13px;
+  line-height: 1.4;
+  min-height: 20px;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 #t-user { color: #88aacc; }
-#t-model { color: #999; font-style: italic; }
+#t-model { color: #777; font-style: italic; }
 
-/* ── sparklines ── */
+/* ── presence bars ── */
 #sparklines {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .spark {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .spark-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--muted);
-  width: 80px;
+  width: 76px;
   text-align: right;
   flex-shrink: 0;
 }
 
-.spark-canvas {
-  background: var(--bg);
-  border-radius: 4px;
+.spark-bar-wrap {
   flex: 1;
-  height: 24px;
+  height: 6px;
+  background: #111118;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
 }
+
+.spark-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  transition: width 0.6s ease, background 0.6s ease, box-shadow 0.6s ease;
+}
+
+.spark-val {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  width: 24px;
+  text-align: right;
+}
+
+.spark-canvas { display: none; }
 
 #timer {
   font-size: 24px;
@@ -250,6 +275,7 @@ main {
 #quick-cmds {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
   margin-left: auto;
 }
 

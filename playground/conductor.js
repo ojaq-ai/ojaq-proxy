@@ -18,6 +18,13 @@ export class SessionConductor {
   onPresence(presence, sendCmd) {
     this.presenceHistory.push({ ...presence, t: Date.now() });
     const elapsed = Date.now() - this.startTime;
+    const turnCount = this.presenceHistory.length;
+
+    // Don't send any commands during the first 3 turns — let the session settle
+    if (turnCount <= 3) {
+      this._emit();
+      return;
+    }
     const prev = this.presenceHistory.length > 1
       ? this.presenceHistory[this.presenceHistory.length - 2] : null;
     let changed = false;

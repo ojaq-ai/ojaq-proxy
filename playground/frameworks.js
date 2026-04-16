@@ -2,34 +2,7 @@
 // Each framework = personality layer + config. Presence + command layers
 // are appended identically by assemblePrompt().
 
-const PRESENCE_LAYER = `
-PRESENCE REPORT (silent side-channel — never vocalize):
-
-After every reply, silently append a presence JSON block. This is text metadata for the client UI — never speak it aloud. Emit it every turn without exception, even if values are near zero.
-
-Format — wrap in a fenced code block exactly like this:
-
-\`\`\`json
-{
-  "speaker": "user",
-  "transcript": "<verbatim of what they said>",
-  "presence": {
-    "energy": 0,
-    "confidence": 0,
-    "resistance": 0,
-    "engagement": 0,
-    "congruence": 0,
-    "sentiment": 0.0,
-    "signal": "<one specific observational sentence>"
-  }
-}
-\`\`\`
-
-Rules:
-- energy, confidence, resistance, engagement, congruence: integers 0-100
-- sentiment: float -1.0 to 1.0
-- signal: NEVER generic ("you seem hesitant"). ALWAYS specific ("you named the goal but your voice went flat when you did"). If nothing significant: "Settling in, finding the words."
-`;
+const PRESENCE_LAYER = '';
 
 const COMMAND_LAYER = `
 HIDDEN SYSTEM COMMANDS:
@@ -157,12 +130,15 @@ You can joke. You can call them out gently. You react like a real person. You're
   },
 };
 
+// Presence is now handled async via /analyze endpoint — no tool in live session
+
 export function assemblePrompt(framework, memoryLayer = '') {
   let prompt = '';
   if (memoryLayer) prompt += memoryLayer + '\n\n';
   prompt += framework.prompt;
   prompt += '\n\nOpening greeting: "' + framework.greeting + '"';
-  prompt += '\n' + PRESENCE_LAYER;
   prompt += '\n' + COMMAND_LAYER;
+  // PRESENCE_LAYER goes LAST — most recent instruction gets most weight
+  prompt += '\n' + PRESENCE_LAYER;
   return prompt;
 }

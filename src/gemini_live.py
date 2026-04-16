@@ -172,7 +172,7 @@ class GeminiLiveSession:
             if sc.get("interrupted"):
                 yield {"type": "interrupted"}
 
-            # audio + text from model turn (parallel)
+            # audio from model turn
             model_turn = sc.get("modelTurn")
             if model_turn:
                 for part in model_turn.get("parts", []):
@@ -185,7 +185,11 @@ class GeminiLiveSession:
                     if "text" in part:
                         self._text_buf += part["text"]
 
-            # turn complete — extract presence from text (never blocked audio)
+            # Gemini 3.1 puts text in outputTranscription, not modelTurn parts
+            if sc.get("outputTranscription", {}).get("text"):
+                self._text_buf += sc["outputTranscription"]["text"]
+
+            # turn complete — extract presence from accumulated text
             if sc.get("turnComplete"):
                 presence = self._extract_presence(self._text_buf)
                 if presence:

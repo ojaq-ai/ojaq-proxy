@@ -1,27 +1,39 @@
 // ── Presence extraction + emotion mapping ───────────────────────────────
 
 export function extractPresence(textBuf) {
-  const m = textBuf.match(/```json\s*([\s\S]*?)```/i);
-  const raw = m ? m[1] : textBuf.match(/\{[\s\S]*\}/)?.[0];
+  // Try fenced ```json block first, then any {..."presence"...} object
+  const m = textBuf.match(/```json\s*([\s\S]*?)```/i)
+         || textBuf.match(/```\s*([\s\S]*?)```/);
+  const raw = m ? m[1] : textBuf.match(/\{[\s\S]*"presence"[\s\S]*\}/)?.[0];
   if (!raw) return null;
   try {
-    const obj = JSON.parse(raw);
+    const obj = JSON.parse(raw.trim());
     if (!obj.presence) return null;
     return obj;
   } catch { return null; }
 }
 
 export function mapEmotion(p) {
-  const { resistance = 0, energy = 0, engagement = 0, sentiment = 0, confidence = 0 } = p;
-  if (resistance > 80 && sentiment < -0.5)
-    return { emotion: 'warning', intensity: clamp(resistance) };
-  if (resistance > 60 || energy > 75)
-    return { emotion: 'alert', intensity: clamp(Math.max(resistance, energy)) };
-  if (engagement > 70 && sentiment > 0.3)
-    return { emotion: 'insight', intensity: clamp(engagement) };
-  if (confidence < 40 && energy > 30)
-    return { emotion: 'listening', intensity: clamp(energy) };
-  return { emotion: 'neutral', intensity: 0 };
+  const { resistance = 0, energy = 0, engagement = 0, sentiment = 0, confidence = 0, congruence = 0 } = p;
+
+  // Score each state — highest score wins. No more falling through to neutral.
+  const scores = {
+    warning:   (resistance > 60 && sentiment < -0.3) ? resistance * 1.2 + Math.abs(sentiment) * 40 : 0,
+    alert:     (resistance > 40 || energy > 60) ? Math.max(resistance, energy) : 0,
+    insight:   (engagement > 50 && sentiment > 0.1) ? engagement * 0.8 + sentiment * 30 : 0,
+    listening: (energy > 20 || engagement > 30) ? (energy + engagement) * 0.5 : 0,
+  };
+
+  let best = 'neutral';
+  let bestScore = 10; // neutral threshold — anything above this wins
+  for (const [emotion, score] of Object.entries(scores)) {
+    if (score > bestScore) { best = emotion; bestScore = score; }
+  }
+
+  // Intensity: dominant signal strength, always meaningful
+  const intensity = clamp(Math.max(energy, engagement, resistance, confidence * 0.5));
+
+  return { emotion: best, intensity };
 }
 
 function clamp(n) { return Math.max(0, Math.min(100, Math.round(n))); }

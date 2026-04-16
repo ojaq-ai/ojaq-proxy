@@ -15,13 +15,13 @@ const MODE_CONFIG = {
 
 class Orb {
   constructor(cx, cy) {
-    this.x = cx + (Math.random() - 0.5) * 120;
-    this.y = cy + (Math.random() - 0.5) * 120;
-    this.vx = 0;
-    this.vy = 0;
-    this.baseR = 6 + Math.random() * 14;
+    this.x = cx + (Math.random() - 0.5) * 160;
+    this.y = cy + (Math.random() - 0.5) * 160;
+    this.vx = (Math.random() - 0.5) * 0.5;
+    this.vy = (Math.random() - 0.5) * 0.5;
+    this.baseR = 8 + Math.random() * 16;
     this.phase = Math.random() * Math.PI * 2;
-    this.orbitR = 20 + Math.random() * 60;
+    this.orbitR = 30 + Math.random() * 70;
   }
 
   update(cx, cy, params) {
@@ -33,10 +33,11 @@ class Orb {
     this.vx += dx * pull;
     this.vy += dy * pull;
 
-    // Orbital
+    // Orbital — always some motion even at low harmony
     this.phase += speed * 0.015;
-    this.vx += Math.cos(this.phase) * harmony * 0.4;
-    this.vy += Math.sin(this.phase * 0.7) * harmony * 0.4;
+    const orbitForce = 0.3 + harmony * 0.5;
+    this.vx += Math.cos(this.phase) * orbitForce;
+    this.vy += Math.sin(this.phase * 0.7) * orbitForce;
 
     this.vx *= 0.93;
     this.vy *= 0.93;
@@ -44,17 +45,17 @@ class Orb {
     this.y += this.vy * speed;
 
     // Store render params
-    this._r = this.baseR * (0.7 + depth * 0.5);
+    this._r = this.baseR * (0.9 + depth * 0.3);
     this._brightness = brightness;
     this._warmth = warmth;
     this._angularity = angularity;
   }
 
   draw(ctx, t) {
-    const r = this._r * (1 + Math.sin(t * 2 + this.phase) * 0.12);
+    const r = this._r * (1 + Math.sin(t * 2 + this.phase) * 0.15);
     const hue = this._warmth * 40 + (1 - this._warmth) * 240;
     const sat = 35 + this._warmth * 25;
-    const alpha = this._brightness * 0.5;
+    const alpha = 0.2 + this._brightness * 0.5;  // always visible, brighter with engagement
 
     // Glow
     const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 3);
@@ -89,7 +90,8 @@ export class Avatar {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.target = { energy: 0, confidence: 50, resistance: 0, engagement: 30, congruence: 50, sentiment: 0 };
+    // Idle state feels alive — not zero, not intense. Breathing.
+    this.target = { energy: 30, confidence: 50, resistance: 5, engagement: 40, congruence: 60, sentiment: 0.1 };
     this.current = { ...this.target };
     this.mode = 'reflect';
     this.depth = 0;
@@ -121,7 +123,7 @@ export class Avatar {
   setDepth(d) { this.depth = d; }
 
   _animate() {
-    this.t += 0.008;
+    this.t += 0.016;
 
     // Smooth interpolation
     for (const k of Object.keys(this.target)) {
@@ -134,11 +136,11 @@ export class Avatar {
     const mc = MODE_CONFIG[this.mode] || MODE_CONFIG.reflect;
 
     const params = {
-      speed:      map(energy, 0, 100, 0.3, 2.0) * mc.speedMul,
-      cohesion:   map(confidence, 0, 100, 0.15, 1.0) * mc.cohesionMul * (0.5 + this.depth * 0.5),
+      speed:      map(energy, 0, 100, 0.6, 2.5) * mc.speedMul,
+      cohesion:   map(confidence, 0, 100, 0.2, 1.0) * mc.cohesionMul * (0.5 + this.depth * 0.5),
       angularity: map(resistance, 0, 100, 0, 1),
-      brightness: map(engagement, 0, 100, 0.25, 1.0) * mc.brightMul,
-      harmony:    map(congruence, 0, 100, 0, 1),
+      brightness: map(engagement, 0, 100, 0.4, 1.0) * mc.brightMul,
+      harmony:    map(congruence, 0, 100, 0.2, 1),
       warmth:     map(sentiment, -1, 1, 0, 1),
       depth:      this.depth,
     };

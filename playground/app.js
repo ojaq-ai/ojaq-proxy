@@ -5,7 +5,7 @@ import { GeminiConnection } from './gemini.js';
 import { MicCapture, AudioPlayer, arrayBufToBase64 } from './audio.js';
 import { Avatar } from './avatar.js';
 import { SessionConductor } from './conductor.js';
-import { extractPresence, mapEmotion, PresenceHistory } from './presence.js';
+import { mapEmotion, PresenceHistory } from './presence.js';
 
 // ── DOM ─────────────────────────────────────────────────────────────────
 const $tabs       = document.getElementById('tabs');
@@ -31,7 +31,6 @@ let player = null;
 let avatar = null;
 let conductor = null;
 let presenceHistory = new PresenceHistory(20);
-let textBuf = '';
 let running = false;
 let timerInterval = null;
 
@@ -65,26 +64,31 @@ function renderTabs() {
 renderTabs();
 
 // ── sparklines ──────────────────────────────────────────────────────────
+// Dimension-specific colors
+const DIM_COLORS = {
+  energy:     '#e8c87a',
+  confidence: '#88dd99',
+  resistance: '#ff6b6b',
+  engagement: '#88bbdd',
+  congruence: '#b8a0ff',
+};
+
 function drawSparklines() {
+  const latest = presenceHistory.entries[presenceHistory.entries.length - 1];
+  if (!latest) return;
+
   document.querySelectorAll('.spark').forEach(el => {
     const dim = el.dataset.dim;
-    const canvas = el.querySelector('.spark-canvas');
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
+    const val = latest[dim] ?? 0;
+    const bar = el.querySelector('.spark-bar');
+    const valEl = el.querySelector('.spark-val');
+    const color = DIM_COLORS[dim] || currentFramework.color;
 
-    const data = presenceHistory.series(dim);
-    if (data.length < 2) return;
-
-    ctx.beginPath();
-    ctx.strokeStyle = currentFramework.color + '88';
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < data.length; i++) {
-      const x = (i / (data.length - 1)) * w;
-      const y = h - (data[i] / 100) * h;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
+    bar.style.width = `${val}%`;
+    bar.style.background = color;
+    bar.style.boxShadow = val > 50 ? `0 0 ${val / 5}px ${color}66` : 'none';
+    valEl.textContent = val;
+    valEl.style.color = val > 60 ? color : 'var(--muted)';
   });
 }
 
@@ -103,6 +107,34 @@ function sendCmd(text) {
   log(`-> ${text}`);
 }
 
+// ── async presence analysis — runs parallel, never blocks voice ──────────
+async function analyzePresence(userText, modelText) {
+  try {
+    const resp = await fetch('/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: userText, model: modelText }),
+    });
+    if (!resp.ok) return;
+    const p = await resp.json();
+    if (p.error) return;
+
+    presenceHistory.push(p);
+    avatar.setPresence(p);
+    if (conductor) conductor.onPresence(p, sendCmd);
+
+    const { emotion, intensity } = mapEmotion(p);
+    $emotionName.textContent = emotion;
+    $emotionVal.textContent = intensity;
+    if (p.signal) $signal.textContent = p.signal;
+    drawSparklines();
+    log(`presence ${emotion} ${intensity} | e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
+    if (p.signal) log(`signal: ${p.signal}`);
+  } catch (e) {
+    // Presence analysis failed — don't interrupt anything
+  }
+}
+
 // ── start / stop ────────────────────────────────────────────────────────
 async function start() {
   $btn.disabled = true;
@@ -110,7 +142,6 @@ async function start() {
 
   try {
     // reset state
-    textBuf = '';
     presenceHistory = new PresenceHistory(20);
 
     // conductor
@@ -125,33 +156,24 @@ async function start() {
     // gemini
     gemini = new GeminiConnection();
     gemini.onAudio = (b64) => player.play(b64);
-    gemini.onText = (chunk) => { textBuf += chunk; };
-    gemini.onTurnComplete = () => {
-      if (textBuf) {
-        const obj = extractPresence(textBuf);
-        if (obj?.presence) {
-          const p = obj.presence;
-          presenceHistory.push(p);
-          avatar.setPresence(p);
-          conductor.onPresence(p, sendCmd);
 
-          const { emotion, intensity } = mapEmotion(p);
-          $emotionName.textContent = emotion;
-          $emotionVal.textContent = intensity;
-          if (p.signal) $signal.textContent = p.signal;
-          if (obj.transcript) $tUser.textContent = obj.transcript;
-          drawSparklines();
-          log(`presence ${emotion} ${intensity} | ${p.signal || ''}`);
-        }
-        textBuf = '';
+    // Track transcripts for async presence analysis
+    let lastUserText = '';
+    let lastModelText = '';
+    gemini.onInputTranscript = (t) => { $tUser.textContent = t; lastUserText = t; };
+    gemini.onOutputTranscript = (t) => { $tModel.textContent = t; lastModelText = t; };
+
+    gemini.onTurnComplete = () => {
+      // Fire async presence analysis — never blocks voice
+      if (lastUserText) {
+        analyzePresence(lastUserText, lastModelText);
+        lastUserText = '';
+        lastModelText = '';
       }
     };
     gemini.onInterrupted = () => {
       player.clear();
-      log('interrupted');
     };
-    gemini.onInputTranscript = (t) => { $tUser.textContent = t; };
-    gemini.onOutputTranscript = (t) => { $tModel.textContent = t; };
     gemini.onGoAway = (t) => log(`goAway: ${t}`);
     gemini.onClose = (code, reason) => {
       log(`ws closed ${code} ${reason || ''}`);
@@ -176,8 +198,8 @@ async function start() {
     setControlsEnabled(true);
     timerInterval = setInterval(updateTimer, 1000);
 
-    // opening greeting
-    sendCmd('[CMD:start]');
+    // opening greeting — small delay to ensure WS is fully ready
+    setTimeout(() => sendCmd('[CMD:start]'), 300);
 
   } catch (err) {
     log(`start failed: ${err.message}`);
@@ -193,7 +215,6 @@ function stop() {
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
   conductor = null;
-  textBuf = '';
   clearInterval(timerInterval);
 
   $btn.textContent = 'Start';
