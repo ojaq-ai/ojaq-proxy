@@ -34,6 +34,16 @@ async def landing_page():
     return FileResponse(LANDING_HTML, media_type="text/html")
 
 
+@app.get("/terms")
+async def terms_page():
+    return FileResponse(_ROOT / "landing" / "terms.html", media_type="text/html")
+
+
+@app.get("/privacy")
+async def privacy_page():
+    return FileResponse(_ROOT / "landing" / "privacy.html", media_type="text/html")
+
+
 @app.get("/test")
 async def test_page():
     return FileResponse(TEST_HTML, media_type="text/html")

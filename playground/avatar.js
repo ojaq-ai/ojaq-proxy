@@ -104,16 +104,15 @@ export class Avatar {
 
   _resize() {
     const rect = this.canvas.parentElement.getBoundingClientRect();
-    const s = Math.min(rect.width, rect.height, 400);
-    this.canvas.width = s * devicePixelRatio;
-    this.canvas.height = s * devicePixelRatio;
-    this.canvas.style.width = s + 'px';
-    this.canvas.style.height = s + 'px';
+    const w = rect.width;
+    const h = rect.height;
+    this.canvas.width = w * devicePixelRatio;
+    this.canvas.height = h * devicePixelRatio;
     this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    this.w = s;
-    this.h = s;
-    const cx = s / 2, cy = s / 2;
+    this.w = w;
+    this.h = h;
     if (this.orbs.length === 0) {
+      const cx = w / 2, cy = h / 2;
       this.orbs = Array.from({ length: 12 }, () => new Orb(cx, cy));
     }
   }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ojaq — Playground</title>
+<title>Ojaq</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,18 +13,20 @@
 
 <!-- ── main area ── -->
 <main>
-  <!-- ── left: avatar ── -->
+  <!-- ── avatar (full area) ── -->
   <div id="avatar-panel">
     <div id="avatar-wrap"><canvas id="avatar-canvas"></canvas></div>
-    <div id="emotion-badge"><span id="emotion-name">neutral</span> <span id="emotion-val">0</span></div>
-    <div id="signal"></div>
-    <div id="phase-mode">
-      <span id="phase-tag">arrival</span>
-      <span id="mode-tag">reflect</span>
+
+    <!-- floating UI over avatar -->
+    <div id="overlay">
+      <div id="status-line">
+        <span id="emotion-badge"><span id="emotion-name">neutral</span></span>
+        <span id="signal"></span>
+      </div>
     </div>
   </div>
 
-  <!-- ── right: sidebar ── -->
+  <!-- ── sidebar ── -->
   <aside id="sidebar">
     <div id="transcripts">
       <div class="t-block">
@@ -37,12 +39,12 @@
       </div>
     </div>
 
-    <div id="sparklines">
-      <div class="spark" data-dim="energy"><span class="spark-label">energy</span><div class="spark-bar-wrap"><div class="spark-bar"></div></div><span class="spark-val">0</span></div>
-      <div class="spark" data-dim="confidence"><span class="spark-label">confidence</span><div class="spark-bar-wrap"><div class="spark-bar"></div></div><span class="spark-val">0</span></div>
-      <div class="spark" data-dim="resistance"><span class="spark-label">resistance</span><div class="spark-bar-wrap"><div class="spark-bar"></div></div><span class="spark-val">0</span></div>
-      <div class="spark" data-dim="engagement"><span class="spark-label">engagement</span><div class="spark-bar-wrap"><div class="spark-bar"></div></div><span class="spark-val">0</span></div>
-      <div class="spark" data-dim="congruence"><span class="spark-label">congruence</span><div class="spark-bar-wrap"><div class="spark-bar"></div></div><span class="spark-val">0</span></div>
+    <div id="presence-bars">
+      <div class="bar" data-dim="energy"><span class="bar-label">energy</span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div class="bar" data-dim="confidence"><span class="bar-label">confidence</span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div class="bar" data-dim="resistance"><span class="bar-label">resistance</span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div class="bar" data-dim="engagement"><span class="bar-label">engagement</span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div class="bar" data-dim="congruence"><span class="bar-label">congruence</span><div class="bar-track"><div class="bar-fill"></div></div></div>
     </div>
 
     <div id="timer">00:00</div>
@@ -51,9 +53,7 @@
 
 <!-- ── controls ── -->
 <footer id="controls">
-  <button id="btn">Start</button>
-  <input id="cmd-input" type="text" placeholder="[CMD:focus:career]" disabled>
-  <button id="cmd-send" disabled>Send</button>
+  <button id="btn"><span id="btn-icon">&#9654;</span> <span id="btn-text">Start Session</span></button>
   <div id="quick-cmds">
     <button data-cmd="[CMD:focus:career]">Career</button>
     <button data-cmd="[CMD:focus:relationships]">Relationships</button>
@@ -62,15 +62,8 @@
     <button data-cmd="[CMD:focus:creativity]">Creativity</button>
     <button data-cmd="[CMD:focus:fear]">Fear</button>
     <button data-cmd="[CMD:focus:purpose]">Purpose</button>
-    <button data-cmd="[CMD:mode:hold]">Hold Space</button>
-    <button data-cmd="[CMD:mode:challenge]">Challenge</button>
-    <button data-cmd="[CMD:phase:deepen]">Deepen</button>
-    <button data-cmd="[CMD:phase:integrate]">Integrate</button>
-    <button data-cmd="[CMD:wrap-up]">Wrap Up</button>
   </div>
 </footer>
-
-<div id="log"></div>
 
 <script type="module" src="app.js"></script>
 </body>

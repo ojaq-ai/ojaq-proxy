@@ -10,18 +10,14 @@ import { mapEmotion, PresenceHistory } from './presence.js';
 // ── DOM ─────────────────────────────────────────────────────────────────
 const $tabs       = document.getElementById('tabs');
 const $btn        = document.getElementById('btn');
-const $cmdInput   = document.getElementById('cmd-input');
-const $cmdSend    = document.getElementById('cmd-send');
+const $btnIcon    = document.getElementById('btn-icon');
+const $btnText    = document.getElementById('btn-text');
 const $quickCmds  = document.getElementById('quick-cmds');
 const $emotionName = document.getElementById('emotion-name');
-const $emotionVal  = document.getElementById('emotion-val');
 const $signal     = document.getElementById('signal');
-const $phaseTag   = document.getElementById('phase-tag');
-const $modeTag    = document.getElementById('mode-tag');
 const $tUser      = document.getElementById('t-user');
 const $tModel     = document.getElementById('t-model');
 const $timer      = document.getElementById('timer');
-const $log        = document.getElementById('log');
 
 // ── state ───────────────────────────────────────────────────────────────
 let currentFramework = FRAMEWORKS.coaching;
@@ -35,12 +31,7 @@ let running = false;
 let timerInterval = null;
 
 // ── logging ─────────────────────────────────────────────────────────────
-function log(msg) {
-  const d = document.createElement('div');
-  d.textContent = `${new Date().toLocaleTimeString()} ${msg}`;
-  $log.appendChild(d);
-  $log.scrollTop = $log.scrollHeight;
-}
+function log(msg) { console.log(`[ojaq] ${msg}`); }
 
 // ── avatar init ─────────────────────────────────────────────────────────
 avatar = new Avatar(document.getElementById('avatar-canvas'));
@@ -73,22 +64,19 @@ const DIM_COLORS = {
   congruence: '#b8a0ff',
 };
 
-function drawSparklines() {
+function updateBars() {
   const latest = presenceHistory.entries[presenceHistory.entries.length - 1];
   if (!latest) return;
 
-  document.querySelectorAll('.spark').forEach(el => {
+  document.querySelectorAll('.bar').forEach(el => {
     const dim = el.dataset.dim;
     const val = latest[dim] ?? 0;
-    const bar = el.querySelector('.spark-bar');
-    const valEl = el.querySelector('.spark-val');
+    const fill = el.querySelector('.bar-fill');
     const color = DIM_COLORS[dim] || currentFramework.color;
 
-    bar.style.width = `${val}%`;
-    bar.style.background = color;
-    bar.style.boxShadow = val > 50 ? `0 0 ${val / 5}px ${color}66` : 'none';
-    valEl.textContent = val;
-    valEl.style.color = val > 60 ? color : 'var(--muted)';
+    fill.style.width = `${val}%`;
+    fill.style.background = color;
+    fill.style.boxShadow = val > 50 ? `0 0 ${Math.round(val / 4)}px ${color}55` : 'none';
   });
 }
 
@@ -101,10 +89,27 @@ function updateTimer() {
 }
 
 // ── send command helper ─────────────────────────────────────────────────
+let cmdQueue = [];
+let modelSpeaking = false;
+
 function sendCmd(text) {
   if (!gemini || !text) return;
+  if (modelSpeaking) {
+    // Queue it — don't interrupt mid-speech
+    cmdQueue.push(text);
+    return;
+  }
   gemini.sendText(text);
   log(`-> ${text}`);
+}
+
+function flushCmdQueue() {
+  if (!gemini || cmdQueue.length === 0) return;
+  // Only send the last command of each type — skip stale ones
+  const last = cmdQueue[cmdQueue.length - 1];
+  cmdQueue = [];
+  gemini.sendText(last);
+  log(`-> ${last}`);
 }
 
 // ── async presence analysis — runs parallel, never blocks voice ──────────
@@ -121,13 +126,13 @@ async function analyzePresence(userText, modelText) {
 
     presenceHistory.push(p);
     avatar.setPresence(p);
-    if (conductor) conductor.onPresence(p, sendCmd);
+    // Conductor updates UI only — never sends text to model automatically
+    if (conductor) conductor.onPresence(p, () => {});
 
     const { emotion, intensity } = mapEmotion(p);
     $emotionName.textContent = emotion;
-    $emotionVal.textContent = intensity;
     if (p.signal) $signal.textContent = p.signal;
-    drawSparklines();
+    updateBars();
     log(`presence ${emotion} ${intensity} | e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
     if (p.signal) log(`signal: ${p.signal}`);
   } catch (e) {
@@ -147,15 +152,14 @@ async function start() {
     // conductor
     conductor = new SessionConductor(currentFramework);
     conductor.onChange(({ phase, mode, depth }) => {
-      $phaseTag.textContent = phase;
-      $modeTag.textContent = mode;
+      // phase/mode tracked internally, avatar reflects it
       avatar.setMode(mode);
       avatar.setDepth(depth);
     });
 
     // gemini
     gemini = new GeminiConnection();
-    gemini.onAudio = (b64) => player.play(b64);
+    gemini.onAudio = (b64) => { modelSpeaking = true; player.play(b64); };
 
     // Track transcripts for async presence analysis
     let lastUserText = '';
@@ -164,6 +168,9 @@ async function start() {
     gemini.onOutputTranscript = (t) => { $tModel.textContent = t; lastModelText = t; };
 
     gemini.onTurnComplete = () => {
+      modelSpeaking = false;
+      // Flush any queued conductor commands now that model is done
+      flushCmdQueue();
       // Fire async presence analysis — never blocks voice
       if (lastUserText) {
         analyzePresence(lastUserText, lastModelText);
@@ -172,6 +179,8 @@ async function start() {
       }
     };
     gemini.onInterrupted = () => {
+      modelSpeaking = false;
+      cmdQueue = [];
       player.clear();
     };
     gemini.onGoAway = (t) => log(`goAway: ${t}`);
@@ -193,7 +202,8 @@ async function start() {
 
     // go
     running = true;
-    $btn.textContent = 'Stop';
+    $btnIcon.innerHTML = '&#9632;';
+    $btnText.textContent = 'End Session';
     $btn.classList.add('stop');
     setControlsEnabled(true);
     timerInterval = setInterval(updateTimer, 1000);
@@ -217,35 +227,24 @@ function stop() {
   conductor = null;
   clearInterval(timerInterval);
 
-  $btn.textContent = 'Start';
+  $btnIcon.innerHTML = '&#9654;';
+  $btnText.textContent = 'Start Session';
   $btn.classList.remove('stop');
   $signal.textContent = '';
   $tUser.textContent = '';
   $tModel.textContent = '';
-  $phaseTag.textContent = 'arrival';
-  $modeTag.textContent = 'reflect';
   $emotionName.textContent = 'neutral';
-  $emotionVal.textContent = '0';
   setControlsEnabled(false);
   log('stopped');
 }
 
 function setControlsEnabled(on) {
-  $cmdInput.disabled = !on;
-  $cmdSend.disabled = !on;
   $quickCmds.querySelectorAll('button').forEach(b => b.disabled = !on);
 }
 
 // ── event wiring ────────────────────────────────────────────────────────
 $btn.addEventListener('click', () => running ? stop() : start());
 
-$cmdSend.addEventListener('click', () => {
-  const v = $cmdInput.value.trim();
-  if (v) { sendCmd(v); $cmdInput.value = ''; }
-});
-$cmdInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { const v = $cmdInput.value.trim(); if (v) { sendCmd(v); $cmdInput.value = ''; } }
-});
 
 $quickCmds.querySelectorAll('button').forEach(btn => {
   btn.addEventListener('click', () => sendCmd(btn.dataset.cmd));
