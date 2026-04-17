@@ -85,8 +85,6 @@ async def session_turn(request: Request):
     entry = {
         "event": "turn",
         "session_id": body.get("session_id", ""),
-        "user_text": body.get("user", "")[:500],
-        "model_text": body.get("model", "")[:500],
         "presence": body.get("presence"),
         "emotion": body.get("emotion", ""),
         "timestamp": datetime.datetime.utcnow().isoformat(),
