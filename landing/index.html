@@ -556,16 +556,37 @@ function draw() {
 draw();
 
 // Waitlist form
-document.getElementById('waitlist-form').addEventListener('submit', (e) => {
+document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = document.getElementById('email-input').value;
-  // Store locally for now — replace with actual backend
-  const list = JSON.parse(localStorage.getItem('ojaq_waitlist') || '[]');
-  list.push({ email, date: new Date().toISOString() });
-  localStorage.setItem('ojaq_waitlist', JSON.stringify(list));
-  document.getElementById('email-input').value = '';
-  document.getElementById('form-note').textContent = "You're in. We'll be in touch.";
-  document.getElementById('form-note').style.color = '#b8a0ff';
+  const email = document.getElementById('email-input').value.trim();
+  if (!email) return;
+
+  // Local dedupe
+  const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
+  if (sent.includes(email.toLowerCase())) {
+    document.getElementById('form-note').textContent = "You're already on the list.";
+    document.getElementById('form-note').style.color = '#b8a0ff';
+    return;
+  }
+
+  try {
+    const r = await fetch('/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, source: 'landing' }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      sent.push(email.toLowerCase());
+      localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
+      document.getElementById('email-input').value = '';
+      document.getElementById('form-note').textContent = "You're in. We'll be in touch.";
+      document.getElementById('form-note').style.color = '#b8a0ff';
+    }
+  } catch {
+    document.getElementById('form-note').textContent = 'Something went wrong. Try again.';
+    document.getElementById('form-note').style.color = '#ff6b6b';
+  }
 });
 </script>
 </body>

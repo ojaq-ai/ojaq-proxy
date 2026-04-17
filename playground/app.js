@@ -220,13 +220,18 @@ async function start() {
     $btnText.textContent = 'End Session';
     $btn.classList.add('stop');
 
-    // log session start
+    // log session start (with rate limit check)
     try {
       const r = await fetch('/session/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ framework: currentFramework.id }),
       });
+      if (r.status === 429) {
+        showRateLimit();
+        stop();
+        return;
+      }
       const d = await r.json();
       sessionId = d.session_id;
     } catch {};
@@ -291,4 +296,58 @@ $quickCmds.querySelectorAll('button').forEach(btn => {
 });
 
 setControlsEnabled(false);
+
+// ── rate limit modal ────────────────────────────────────────────────────
+function showRateLimit() {
+  // Remove existing if any
+  document.getElementById('rate-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'rate-overlay';
+  overlay.innerHTML = `
+    <div id="rate-box">
+      <p class="rate-title">You've used your previews for today.</p>
+      <p class="rate-sub">The mobile app opens this up fully. Join the waitlist.</p>
+      <form id="rate-form">
+        <input type="email" id="rate-email" placeholder="your@email.com" required>
+        <button type="submit">Join waitlist</button>
+      </form>
+      <p id="rate-note"></p>
+      <button id="rate-close">Close</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#rate-close').onclick = () => overlay.remove();
+  overlay.querySelector('#rate-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const email = overlay.querySelector('#rate-email').value.trim();
+    if (!email) return;
+
+    // Local dedupe
+    const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
+    if (sent.includes(email.toLowerCase())) {
+      overlay.querySelector('#rate-note').textContent = "You're already on the list.";
+      return;
+    }
+
+    try {
+      const r = await fetch('/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'rate_limit' }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        sent.push(email.toLowerCase());
+        localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
+        overlay.querySelector('#rate-form').style.display = 'none';
+        overlay.querySelector('#rate-note').textContent = "You're in. We'll be in touch.";
+      }
+    } catch {
+      overlay.querySelector('#rate-note').textContent = 'Something went wrong. Try again.';
+    }
+  };
+}
+
 log('playground ready');

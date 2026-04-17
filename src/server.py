@@ -57,22 +57,120 @@ async def get_token():
     return {"token": GEMINI_API_KEY}
 
 
-# ── Session analytics ────────────────────────────────────────────────────
+# ── Persistent data paths ────────────────────────────────────────────────
 import datetime
 import uuid
 
-SESSIONS_LOG = _ROOT / "sessions.jsonl"
+# Railway volume at /data if available, otherwise fallback to project root
+_DATA_DIR = Path("/data") if Path("/data").is_dir() else _ROOT
+SESSIONS_LOG = _DATA_DIR / "sessions.jsonl"
+WAITLIST_FILE = _DATA_DIR / "waitlist.jsonl"
+
+
+# ── Rate limiting (in-memory only, never persisted) ──────────────────────
+_rate_map = {}  # ip -> [timestamp, ...]
+_RATE_LIMIT = 3
+_RATE_WINDOW = 86400  # 24 hours
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate(ip: str) -> bool:
+    now = datetime.datetime.utcnow().timestamp()
+    cutoff = now - _RATE_WINDOW
+    timestamps = [t for t in _rate_map.get(ip, []) if t > cutoff]
+    _rate_map[ip] = timestamps
+    return len(timestamps) < _RATE_LIMIT
+
+
+def _record_rate(ip: str):
+    _rate_map.setdefault(ip, []).append(
+        datetime.datetime.utcnow().timestamp()
+    )
+
+
+async def _cleanup_rate_map():
+    while True:
+        await asyncio.sleep(3600)
+        now = datetime.datetime.utcnow().timestamp()
+        cutoff = now - _RATE_WINDOW
+        stale = [
+            ip for ip, ts in _rate_map.items()
+            if all(t <= cutoff for t in ts)
+        ]
+        for ip in stale:
+            del _rate_map[ip]
+
+
+@app.on_event("startup")
+async def _start_cleanup():
+    asyncio.create_task(_cleanup_rate_map())
+
+
+# ── Waitlist ─────────────────────────────────────────────────────────────
+def _waitlist_has_email(email: str) -> bool:
+    """Check if email already exists in waitlist (case-insensitive)."""
+    if not WAITLIST_FILE.exists():
+        return False
+    lower = email.lower()
+    for line in WAITLIST_FILE.read_text().splitlines():
+        try:
+            entry = json.loads(line)
+            if entry.get("email", "").lower() == lower:
+                return True
+        except json.JSONDecodeError:
+            continue
+    return False
+
+
+@app.post("/waitlist")
+async def waitlist_signup(request: Request):
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    source = body.get("source", "unknown")
+
+    if not email or "@" not in email:
+        return JSONResponse({"error": "Invalid email"}, 400)
+
+    if _waitlist_has_email(email):
+        return {"ok": True, "message": "already_registered"}
+
+    entry = {
+        "email": email,
+        "source": source,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+    with open(WAITLIST_FILE, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+    # Also log to stdout so Railway log drain captures it as backup
+    logger.info(f"WAITLIST: {email} (source={source})")
+
+    return {"ok": True, "message": "registered"}
 
 
 @app.post("/session/start")
 async def session_start(request: Request):
+    ip = _get_client_ip(request)
+    if not _check_rate(ip):
+        return JSONResponse(
+            {"error": "rate_limited",
+             "message": "You've used your previews for today."},
+            status_code=429,
+        )
+    _record_rate(ip)
+
     body = await request.json()
     entry = {
         "event": "start",
         "session_id": str(uuid.uuid4())[:8],
         "framework": body.get("framework", "unknown"),
         "timestamp": datetime.datetime.utcnow().isoformat(),
-        "user_agent": request.headers.get("user-agent", "")[:100],
     }
     with open(SESSIONS_LOG, "a") as f:
         f.write(json.dumps(entry) + "\n")
