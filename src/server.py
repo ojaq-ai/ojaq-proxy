@@ -265,25 +265,52 @@ async def session_action(request: Request):
 
 
 ANALYZE_PROMPT = """\
-Analyze the emotional presence in this conversation turn.
+You are a presence reader. Given a conversation turn, report the \
+user's emotional state.
+
 User said: "{user_text}"
 Coach said: "{model_text}"
 
-Return ONLY a JSON object with these fields:
-- energy (0-100): how activated/alive the user sounds
-- confidence (0-100): how assured
-- resistance (0-100): defensiveness or avoidance
-- engagement (0-100): how present and involved
-- congruence (0-100): alignment between words and tone
-- sentiment (-1.0 to 1.0): emotional valence
-- signal (string): one specific observational sentence about what is really happening beneath the words. Never generic.
+Return ONLY a JSON object:
+- energy (0-100): how alive they sound, not how loud
+- confidence (0-100): real ground, not performance
+- resistance (0-100): where they're guarding or avoiding
+- engagement (0-100): how present they are in what they're saying
+- congruence (0-100): does the way they say it match what they say
+- sentiment (-1.0 to 1.0): emotional temperature
+- signal (string): one sentence. What is actually happening \
+beneath the words. Not a summary. Not analysis. A specific, \
+human observation.
+
+Rules for the signal:
+- Write it to the user in second person ("you"), never third \
+person ("the user" or "they").
+- Observe HOW they are, not WHAT they said. Test: a good signal \
+would land equally well for someone who didn't hear the conversation.
+- Write it in the user's speaking language. If they spoke Turkish, \
+signal in Turkish. If English, English.
+- One sentence. No analytical hedging ("indicating", "suggesting", \
+"underlying").
+- Like whispering to a friend about what you just noticed -- \
+specific, grounded, human.
+
+Signal examples:
+- Good: "You named the goal but went flat when you said it."
+- Good: "Something opened up halfway through."
+- Good: "There was a pause before you said it."
+- Good (Turkish): "Icinde bir sey direniyor ama henuz adlandirmadin."
+- Bad: "The user is expressing positive emotions." (clinical, third person)
+- Bad: "You seem engaged with the topic." (generic, says nothing)
+- Bad: "You mentioned your sister and opened up." (describes content)
 
 JSON only, no markdown, no explanation."""
 
-GEMINI_REST_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
-)
+_ANALYZE_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3-flash-preview",
+]
+_REST_BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
 
 _http = httpx.AsyncClient(timeout=10)
 
@@ -297,27 +324,39 @@ async def analyze_presence(request: Request):
         return JSONResponse({"error": "no user text"}, 400)
 
     prompt = ANALYZE_PROMPT.format(user_text=user_text, model_text=model_text)
-    try:
-        resp = await _http.post(
-            f"{GEMINI_REST_URL}?key={GEMINI_API_KEY}",
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.2},
-            },
-        )
-        data = resp.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        # Strip markdown fences if present
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        presence = json.loads(text.strip())
-        return presence
-    except Exception as e:
-        logger.error(f"Presence analysis failed: {e}")
-        return JSONResponse({"error": str(e)}, 500)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2},
+    }
+
+    # Try each model in the fallback chain
+    last_error = None
+    for model in _ANALYZE_MODELS:
+        try:
+            resp = await _http.post(
+                f"{_REST_BASE}{model}:generateContent?key={GEMINI_API_KEY}",
+                json=payload,
+            )
+            if resp.status_code == 503:
+                logger.warning(f"Analyze: {model} returned 503, trying next")
+                continue
+            data = resp.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            # Strip markdown fences if present
+            text = text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            presence = json.loads(text.strip())
+            return presence
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Analyze: {model} failed: {e}")
+            continue
+
+    logger.error(f"Presence analysis failed on all models: {last_error}")
+    return JSONResponse({"error": "all models unavailable"}, 503)
 
 
 @app.websocket("/ws")
