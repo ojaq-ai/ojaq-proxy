@@ -29,6 +29,8 @@ let conductor = null;
 let presenceHistory = new PresenceHistory(20);
 let running = false;
 let timerInterval = null;
+let sessionId = null;
+let turnCount = 0;
 
 // ── logging ─────────────────────────────────────────────────────────────
 function log(msg) { console.log(`[ojaq] ${msg}`); }
@@ -135,6 +137,17 @@ async function analyzePresence(userText, modelText) {
     updateBars();
     log(`presence ${emotion} ${intensity} | e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
     if (p.signal) log(`signal: ${p.signal}`);
+
+    // Log turn for analytics
+    turnCount++;
+    fetch('/session/turn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId, user: userText, model: modelText,
+        presence: p, emotion,
+      }),
+    }).catch(() => {});
   } catch (e) {
     // Presence analysis failed — don't interrupt anything
   }
@@ -202,9 +215,21 @@ async function start() {
 
     // go
     running = true;
+    turnCount = 0;
     $btnIcon.innerHTML = '&#9632;';
     $btnText.textContent = 'End Session';
     $btn.classList.add('stop');
+
+    // log session start
+    try {
+      const r = await fetch('/session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ framework: currentFramework.id }),
+      });
+      const d = await r.json();
+      sessionId = d.session_id;
+    } catch {};
     setControlsEnabled(true);
     timerInterval = setInterval(updateTimer, 1000);
 
@@ -220,6 +245,21 @@ async function start() {
 }
 
 function stop() {
+  // Log session end
+  if (sessionId && conductor) {
+    fetch('/session/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        duration_ms: conductor.elapsed,
+        turns: turnCount,
+        framework: currentFramework.id,
+      }),
+    }).catch(() => {});
+  }
+  sessionId = null;
+  turnCount = 0;
   running = false;
   mic?.stop(); mic = null;
   player?.stop(); player = null;

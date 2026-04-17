@@ -57,6 +57,61 @@ async def get_token():
     return {"token": GEMINI_API_KEY}
 
 
+# ── Session analytics ────────────────────────────────────────────────────
+import datetime
+import uuid
+
+SESSIONS_LOG = _ROOT / "sessions.jsonl"
+
+
+@app.post("/session/start")
+async def session_start(request: Request):
+    body = await request.json()
+    entry = {
+        "event": "start",
+        "session_id": str(uuid.uuid4())[:8],
+        "framework": body.get("framework", "unknown"),
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "user_agent": request.headers.get("user-agent", "")[:100],
+    }
+    with open(SESSIONS_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    return {"session_id": entry["session_id"]}
+
+
+@app.post("/session/turn")
+async def session_turn(request: Request):
+    body = await request.json()
+    entry = {
+        "event": "turn",
+        "session_id": body.get("session_id", ""),
+        "user_text": body.get("user", "")[:500],
+        "model_text": body.get("model", "")[:500],
+        "presence": body.get("presence"),
+        "emotion": body.get("emotion", ""),
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+    with open(SESSIONS_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    return {"ok": True}
+
+
+@app.post("/session/end")
+async def session_end(request: Request):
+    body = await request.json()
+    entry = {
+        "event": "end",
+        "session_id": body.get("session_id", ""),
+        "duration_ms": body.get("duration_ms", 0),
+        "turns": body.get("turns", 0),
+        "framework": body.get("framework", ""),
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+    with open(SESSIONS_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    return {"ok": True}
+
+
 ANALYZE_PROMPT = """\
 Analyze the emotional presence in this conversation turn.
 User said: "{user_text}"
