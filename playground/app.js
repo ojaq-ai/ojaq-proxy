@@ -13,7 +13,7 @@ const $btn        = document.getElementById('btn');
 const $btnIcon    = document.getElementById('btn-icon');
 const $btnText    = document.getElementById('btn-text');
 const $quickCmds  = document.getElementById('quick-cmds');
-const $emotionName = document.getElementById('emotion-name');
+// emotion label removed from UI — orbs are the sole visualization
 const $signal     = document.getElementById('signal');
 const $tUser      = document.getElementById('t-user');
 const $tModel     = document.getElementById('t-model');
@@ -54,6 +54,63 @@ function detectLanguage() {
 }
 
 const userLanguage = detectLanguage();
+const langBase = userLanguage.split('-')[0];
+
+// ── i18n strings ────────────────────────────────────────────────────────
+const I18N = {
+  en: {
+    cta: 'Want to continue this?',
+    sub: "The mobile app is where Ojaq goes deeper. I'll email you when it's ready.",
+    fbPlaceholder: 'Anything you want me to know? (optional)',
+    success: "You're in. I'll find you when it's ready.",
+    thanks: 'Thank you.',
+    expTitle: "You've spent time with Ojaq today.",
+    expSub: "The mobile app is where it goes deeper. I'll find you when it's ready.",
+    minutes: (n) => `${n} minute${n > 1 ? 's' : ''}`,
+  },
+  tr: {
+    cta: 'Devam etmek ister misin?',
+    sub: "Mobil uygulama, Ojaq'in daha derine indigi yer. Hazir oldugunda sana yazarim.",
+    fbPlaceholder: 'Bana soylemek istedigin bir sey var mi? (istege bagli)',
+    success: 'Listeye girdin. Hazir oldugunda seni bulurum.',
+    thanks: 'Tesekkur ederim.',
+    expTitle: "Bugun Ojaq ile zaman gecirdin.",
+    expSub: "Mobil uygulama, Ojaq'in daha derine indigi yer. Hazir oldugunda seni bulurum.",
+    minutes: (n) => `${n} dakika`,
+  },
+  de: {
+    cta: 'Mochtest du das fortsetzen?',
+    sub: 'Die mobile App ist der Ort, an dem Ojaq tiefer geht. Ich schreibe dir, wenn sie bereit ist.',
+    fbPlaceholder: 'Mochtest du mir etwas mitteilen? (optional)',
+    success: 'Du bist dabei. Ich melde mich, wenn es soweit ist.',
+    thanks: 'Danke.',
+    expTitle: 'Du hast heute Zeit mit Ojaq verbracht.',
+    expSub: 'Die mobile App ist der Ort, an dem Ojaq tiefer geht. Ich finde dich, wenn sie bereit ist.',
+    minutes: (n) => `${n} Minute${n > 1 ? 'n' : ''}`,
+  },
+  es: {
+    cta: 'Quieres continuar esto?',
+    sub: 'La aplicacion movil es donde Ojaq va mas profundo. Te escribire cuando este lista.',
+    fbPlaceholder: 'Algo que quieras decirme? (opcional)',
+    success: 'Estas dentro. Te encontrare cuando este lista.',
+    thanks: 'Gracias.',
+    expTitle: 'Has pasado tiempo con Ojaq hoy.',
+    expSub: 'La aplicacion movil es donde va mas profundo. Te encontrare cuando este lista.',
+    minutes: (n) => `${n} minuto${n > 1 ? 's' : ''}`,
+  },
+  fr: {
+    cta: 'Veux-tu continuer?',
+    sub: "L'application mobile, c'est la ou Ojaq va plus loin. Je t'ecrirai quand elle sera prete.",
+    fbPlaceholder: 'Quelque chose a me dire? (facultatif)',
+    success: "Tu es sur la liste. Je te retrouverai quand ce sera pret.",
+    thanks: 'Merci.',
+    expTitle: "Tu as passe du temps avec Ojaq aujourd'hui.",
+    expSub: "L'application mobile, c'est la ou ca va plus loin. Je te retrouverai quand ce sera pret.",
+    minutes: (n) => `${n} minute${n > 1 ? 's' : ''}`,
+  },
+};
+
+const t = I18N[langBase] || I18N.en;
 
 // ── avatar init ─────────────────────────────────────────────────────────
 avatar = new Avatar(document.getElementById('avatar-canvas'));
@@ -152,7 +209,7 @@ async function analyzePresence(userText, modelText) {
     if (conductor) conductor.onPresence(p, () => {});
 
     const { emotion, intensity } = mapEmotion(p);
-    $emotionName.textContent = emotion;
+    // emotion label removed from UI
     if (p.signal) $signal.textContent = p.signal;
     updateBars();
     log(`presence ${emotion} ${intensity} | e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
@@ -311,7 +368,6 @@ function stop() {
   $btn.classList.remove('stop');
   $tUser.textContent = '';
   $tModel.textContent = '';
-  $emotionName.textContent = '';
   setControlsEnabled(false);
   log('stopped');
 
@@ -332,14 +388,21 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
   const $note = document.getElementById('reflect-wl-note');
   const $fb = document.getElementById('reflect-fb');
 
-  // Duration: skip under 60s, otherwise "N minutes"
+  // Duration: skip under 60s
   const mins = Math.floor(durationMs / 60000);
   if (mins >= 1) {
-    $dur.textContent = `${mins} minute${mins > 1 ? 's' : ''}`;
+    $dur.textContent = t.minutes(mins);
     $dur.style.display = '';
   } else {
     $dur.style.display = 'none';
   }
+
+  // Set i18n copy
+  const cta = $ref.querySelector('.reflect-cta');
+  const sub = $ref.querySelector('.reflect-sub');
+  if (cta) cta.textContent = t.cta;
+  if (sub) sub.textContent = t.sub;
+  $fb.placeholder = t.fbPlaceholder;
 
   // Signal: skip if empty
   if (lastSignal.trim()) {
@@ -385,7 +448,7 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
         sent.push(email.toLowerCase());
         localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
         $email.style.display = 'none';
-        $note.textContent = "You're in. I'll find you when it's ready.";
+        $note.textContent = t.success;
         // Log action
         fetch('/session/action', {
           method: 'POST',
@@ -413,8 +476,8 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
         }),
       });
       $fb.value = '';
-      $fb.placeholder = 'Thank you.';
-      setTimeout(() => { $fb.placeholder = 'Anything you want me to know? (optional)'; }, 4000);
+      $fb.placeholder = t.thanks;
+      setTimeout(() => { $fb.placeholder = t.fbPlaceholder; }, 4000);
       // Log action
       fetch('/session/action', {
         method: 'POST',
@@ -467,12 +530,13 @@ function showExperiencedState() {
   // Override waitlist copy
   const cta = $ref.querySelector('.reflect-cta');
   const sub = $ref.querySelector('.reflect-sub');
-  if (cta) cta.textContent = "You've spent time with Ojaq today.";
-  if (sub) sub.textContent = "The mobile app is where it goes deeper. I'll find you when it's ready.";
+  if (cta) cta.textContent = t.expTitle;
+  if (sub) sub.textContent = t.expSub;
 
   $email.value = '';
   $note.textContent = '';
   $fb.value = '';
+  $fb.placeholder = t.fbPlaceholder;
   $ref.style.display = 'flex';
 
   // Email — submit on Enter
@@ -499,7 +563,7 @@ function showExperiencedState() {
         sent.push(email.toLowerCase());
         localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
         $email.style.display = 'none';
-        $note.textContent = "You're in. I'll find you when it's ready.";
+        $note.textContent = t.success;
       }
     } catch {
       $note.textContent = 'Something went wrong. Try again.';
@@ -517,8 +581,8 @@ function showExperiencedState() {
         body: JSON.stringify({ text, duration_s: 0, framework: 'rate_limit' }),
       });
       $fb.value = '';
-      $fb.placeholder = 'Thank you.';
-      setTimeout(() => { $fb.placeholder = 'Anything you want me to know? (optional)'; }, 4000);
+      $fb.placeholder = t.thanks;
+      setTimeout(() => { $fb.placeholder = t.fbPlaceholder; }, 4000);
     } catch {}
   };
   $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFb(); } };

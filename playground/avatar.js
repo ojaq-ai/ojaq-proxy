@@ -14,14 +14,15 @@ const MODE_CONFIG = {
 };
 
 class Orb {
-  constructor(cx, cy) {
-    this.x = cx + (Math.random() - 0.5) * 160;
-    this.y = cy + (Math.random() - 0.5) * 160;
+  constructor(cx, cy, scale) {
+    const s = scale || 1;
+    this.x = cx + (Math.random() - 0.5) * 160 * s;
+    this.y = cy + (Math.random() - 0.5) * 160 * s;
     this.vx = (Math.random() - 0.5) * 0.5;
     this.vy = (Math.random() - 0.5) * 0.5;
-    this.baseR = 8 + Math.random() * 16;
+    this.baseR = (8 + Math.random() * 16) * s;
     this.phase = Math.random() * Math.PI * 2;
-    this.orbitR = 30 + Math.random() * 70;
+    this.orbitR = (30 + Math.random() * 70) * s;
   }
 
   update(cx, cy, params) {
@@ -113,7 +114,9 @@ export class Avatar {
     this.h = h;
     if (this.orbs.length === 0) {
       const cx = w / 2, cy = h / 2;
-      this.orbs = Array.from({ length: 12 }, () => new Orb(cx, cy));
+      // Scale orbs relative to smallest dimension (400px = 1.0 baseline)
+      const scale = Math.min(w, h) / 400;
+      this.orbs = Array.from({ length: 12 }, () => new Orb(cx, cy, scale));
     }
   }
 
