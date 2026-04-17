@@ -498,15 +498,26 @@ function showExperiencedState() {
   $fb.onblur = () => submitFb();
 }
 
-// ── page load: check rate limit status ──────────────────────────────────
+// ── page load: check rate limit status before showing UI ────────────────
+function showNormalUI() {
+  document.getElementById('tabs').style.display = '';
+  document.getElementById('sidebar').style.display = '';
+  document.getElementById('controls').style.display = '';
+}
+
 (async () => {
   try {
     const r = await fetch('/session/status');
     const d = await r.json();
     if (d.sessions_remaining === 0) {
       showExperiencedState();
+    } else {
+      showNormalUI();
     }
-  } catch {}
+  } catch {
+    // If status check fails, show normal UI as fallback
+    showNormalUI();
+  }
 })();
 
 log('playground ready');

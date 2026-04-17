@@ -71,6 +71,7 @@ WAITLIST_FILE = _DATA_DIR / "waitlist.jsonl"
 _rate_map = {}  # ip -> [timestamp, ...]
 _RATE_LIMIT = 3
 _RATE_WINDOW = 86400  # 24 hours
+_RATE_DISABLED = os.getenv("RATE_LIMIT_DISABLED", "").lower() in ("1", "true", "yes")
 
 
 def _get_client_ip(request: Request) -> str:
@@ -81,6 +82,8 @@ def _get_client_ip(request: Request) -> str:
 
 
 def _check_rate(ip: str) -> bool:
+    if _RATE_DISABLED:
+        return True
     now = datetime.datetime.utcnow().timestamp()
     cutoff = now - _RATE_WINDOW
     timestamps = [t for t in _rate_map.get(ip, []) if t > cutoff]
@@ -156,6 +159,8 @@ async def waitlist_signup(request: Request):
 
 @app.get("/session/status")
 async def session_status(request: Request):
+    if _RATE_DISABLED:
+        return {"sessions_remaining": 99, "reset_at": None}
     ip = _get_client_ip(request)
     now = datetime.datetime.utcnow().timestamp()
     cutoff = now - _RATE_WINDOW
