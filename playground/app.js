@@ -35,6 +35,26 @@ let turnCount = 0;
 // ── logging ─────────────────────────────────────────────────────────────
 function log(msg) { console.log(`[ojaq] ${msg}`); }
 
+// ── language detection ──────────────────────────────────────────────────
+function detectLanguage() {
+  const nav = (navigator.language || '').trim();
+  if (!nav) return 'en-US';
+
+  // Already has region: "tr-TR", "en-GB", "ja-JP"
+  if (nav.includes('-') && nav.length >= 4) return nav;
+
+  // Map bare language codes to sensible default regions
+  const map = {
+    tr: 'tr-TR', en: 'en-US', ja: 'ja-JP', es: 'es-ES',
+    fr: 'fr-FR', de: 'de-DE', pt: 'pt-BR', ar: 'ar-SA',
+    zh: 'zh-CN', it: 'it-IT', ru: 'ru-RU', ko: 'ko-KR',
+  };
+  const lang = nav.toLowerCase().split('-')[0];
+  return map[lang] || `${lang}-${lang.toUpperCase()}`;
+}
+
+const userLanguage = detectLanguage();
+
 // ── avatar init ─────────────────────────────────────────────────────────
 avatar = new Avatar(document.getElementById('avatar-canvas'));
 
@@ -174,22 +194,28 @@ async function start() {
     gemini = new GeminiConnection();
     gemini.onAudio = (b64) => { modelSpeaking = true; player.play(b64); };
 
-    // Track transcripts for async presence analysis
+    // Track transcripts — accumulate incremental deltas per turn
     let lastUserText = '';
     let lastModelText = '';
-    gemini.onInputTranscript = (t) => { $tUser.textContent = t; lastUserText = t; };
-    gemini.onOutputTranscript = (t) => { $tModel.textContent = t; lastModelText = t; };
+    gemini.onInputTranscript = (t) => {
+      lastUserText += t;
+      $tUser.textContent = lastUserText;
+    };
+    gemini.onOutputTranscript = (t) => {
+      lastModelText += t;
+      $tModel.textContent = lastModelText;
+    };
 
     gemini.onTurnComplete = () => {
       modelSpeaking = false;
-      // Flush any queued conductor commands now that model is done
       flushCmdQueue();
-      // Fire async presence analysis — never blocks voice
+      // Fire async presence analysis with full turn text
       if (lastUserText) {
         analyzePresence(lastUserText, lastModelText);
-        lastUserText = '';
-        lastModelText = '';
       }
+      // Reset for next turn
+      lastUserText = '';
+      lastModelText = '';
     };
     gemini.onInterrupted = () => {
       modelSpeaking = false;
@@ -203,7 +229,8 @@ async function start() {
     };
 
     const prompt = assemblePrompt(currentFramework);
-    await gemini.connect(prompt);
+    await gemini.connect(prompt, [], userLanguage);
+    log(`language: ${userLanguage}`);
     log('session ready');
 
     // audio

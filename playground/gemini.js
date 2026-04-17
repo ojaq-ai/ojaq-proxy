@@ -22,7 +22,7 @@ export class GeminiConnection {
     this.onGoAway = null;
   }
 
-  async connect(systemPrompt, tools = []) {
+  async connect(systemPrompt, tools = [], language = 'en-US') {
     const resp = await fetch('/token');
     if (!resp.ok) throw new Error(`/token ${resp.status}`);
     const { token } = await resp.json();
@@ -34,7 +34,10 @@ export class GeminiConnection {
       this.ws.onopen = () => {
         const setup = {
           model: MODEL,
-          generationConfig: { responseModalities: ['AUDIO'] },
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { languageCode: language },
+          },
           systemInstruction: { parts: [{ text: systemPrompt }] },
           outputAudioTranscription: {},
           inputAudioTranscription: {},
