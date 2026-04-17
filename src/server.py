@@ -154,6 +154,22 @@ async def waitlist_signup(request: Request):
     return {"ok": True, "message": "registered"}
 
 
+@app.get("/session/status")
+async def session_status(request: Request):
+    ip = _get_client_ip(request)
+    now = datetime.datetime.utcnow().timestamp()
+    cutoff = now - _RATE_WINDOW
+    timestamps = [t for t in _rate_map.get(ip, []) if t > cutoff]
+    remaining = max(0, _RATE_LIMIT - len(timestamps))
+    # Reset time = earliest timestamp + 24h
+    reset_at = None
+    if timestamps and remaining == 0:
+        reset_at = datetime.datetime.utcfromtimestamp(
+            min(timestamps) + _RATE_WINDOW
+        ).isoformat()
+    return {"sessions_remaining": remaining, "reset_at": reset_at}
+
+
 @app.post("/session/start")
 async def session_start(request: Request):
     ip = _get_client_ip(request)

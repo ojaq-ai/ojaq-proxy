@@ -228,8 +228,8 @@ async function start() {
         body: JSON.stringify({ framework: currentFramework.id }),
       });
       if (r.status === 429) {
-        showRateLimit();
         stop();
+        showExperiencedState();
         return;
       }
       const d = await r.json();
@@ -415,37 +415,49 @@ $quickCmds.querySelectorAll('button').forEach(btn => {
 
 setControlsEnabled(false);
 
-// ── rate limit modal ────────────────────────────────────────────────────
-function showRateLimit() {
-  // Remove existing if any
-  document.getElementById('rate-overlay')?.remove();
+// ── experienced state (rate limited) ─────────────────────────────────────
+function showExperiencedState() {
+  // Hide normal UI
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('sidebar').style.display = 'none';
+  document.getElementById('tabs').style.display = 'none';
+  document.getElementById('overlay').style.display = 'none';
 
-  const overlay = document.createElement('div');
-  overlay.id = 'rate-overlay';
-  overlay.innerHTML = `
-    <div id="rate-box">
-      <p class="rate-title">You've used your previews for today.</p>
-      <p class="rate-sub">The mobile app opens this up fully. Join the waitlist.</p>
-      <form id="rate-form">
-        <input type="email" id="rate-email" placeholder="your@email.com" required>
-        <button type="submit">Join waitlist</button>
-      </form>
-      <p id="rate-note"></p>
-      <button id="rate-close">Close</button>
-    </div>
-  `;
-  document.body.appendChild(overlay);
+  // Settle orbs to calm idle
+  avatar.settleToRest(2500);
 
-  overlay.querySelector('#rate-close').onclick = () => overlay.remove();
-  overlay.querySelector('#rate-form').onsubmit = async (e) => {
+  // Show reflection screen with rate-limit copy
+  const $ref = document.getElementById('reflection');
+  const $dur = document.getElementById('reflect-duration');
+  const $sig = document.getElementById('reflect-signal');
+  const $email = document.getElementById('reflect-email');
+  const $note = document.getElementById('reflect-wl-note');
+  const $fb = document.getElementById('reflect-fb');
+
+  $dur.style.display = 'none';
+  $sig.style.display = 'none';
+
+  // Override waitlist copy
+  const cta = $ref.querySelector('.reflect-cta');
+  const sub = $ref.querySelector('.reflect-sub');
+  if (cta) cta.textContent = "You've spent time with Ojaq today.";
+  if (sub) sub.textContent = "The mobile app is where it goes deeper. I'll find you when it's ready.";
+
+  $email.value = '';
+  $note.textContent = '';
+  $fb.value = '';
+  $ref.style.display = 'flex';
+
+  // Email — submit on Enter
+  $email.onkeydown = async (e) => {
+    if (e.key !== 'Enter') return;
     e.preventDefault();
-    const email = overlay.querySelector('#rate-email').value.trim();
+    const email = $email.value.trim();
     if (!email) return;
 
-    // Local dedupe
     const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
     if (sent.includes(email.toLowerCase())) {
-      overlay.querySelector('#rate-note').textContent = "You're already on the list.";
+      $note.textContent = "You're already on the list.";
       return;
     }
 
@@ -459,13 +471,42 @@ function showRateLimit() {
       if (d.ok) {
         sent.push(email.toLowerCase());
         localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
-        overlay.querySelector('#rate-form').style.display = 'none';
-        overlay.querySelector('#rate-note').textContent = "You're in. We'll be in touch.";
+        $email.style.display = 'none';
+        $note.textContent = "You're in. I'll find you when it's ready.";
       }
     } catch {
-      overlay.querySelector('#rate-note').textContent = 'Something went wrong. Try again.';
+      $note.textContent = 'Something went wrong. Try again.';
     }
   };
+
+  // Feedback
+  const submitFb = async () => {
+    const text = $fb.value.trim();
+    if (!text) return;
+    try {
+      await fetch('/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, duration_s: 0, framework: 'rate_limit' }),
+      });
+      $fb.value = '';
+      $fb.placeholder = 'Thank you.';
+      setTimeout(() => { $fb.placeholder = 'Anything you want me to know? (optional)'; }, 4000);
+    } catch {}
+  };
+  $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFb(); } };
+  $fb.onblur = () => submitFb();
 }
+
+// ── page load: check rate limit status ──────────────────────────────────
+(async () => {
+  try {
+    const r = await fetch('/session/status');
+    const d = await r.json();
+    if (d.sessions_remaining === 0) {
+      showExperiencedState();
+    }
+  } catch {}
+})();
 
 log('playground ready');
