@@ -154,6 +154,30 @@ async def waitlist_signup(request: Request):
     return {"ok": True, "message": "registered"}
 
 
+@app.get("/waitlist")
+async def waitlist_list():
+    """Return all waitlist entries collected so far."""
+    if not WAITLIST_FILE.exists():
+        return {"entries": []}
+
+    entries = []
+    for line in WAITLIST_FILE.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+            entries.append({
+                "email": entry.get("email", ""),
+                "source": entry.get("source", ""),
+                "timestamp": entry.get("timestamp", ""),
+            })
+        except json.JSONDecodeError:
+            continue
+
+    return {"entries": entries}
+
+
 @app.post("/session/start")
 async def session_start(request: Request):
     ip = _get_client_ip(request)
