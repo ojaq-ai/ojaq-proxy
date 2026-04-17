@@ -117,17 +117,49 @@ export class Avatar {
     }
   }
 
-  setPresence(p) { this.target = { ...p }; }
+  setPresence(p) { this.target = { ...p }; this._settling = false; }
   setMode(m) { this.mode = m; }
   setDepth(d) { this.depth = d; }
+
+  /** Slow-fade from current state toward a damped rest — keeps the
+   *  emotional fingerprint of wherever the session ended, just softer. */
+  settleToRest(durationMs = 2500) {
+    this._settling = true;
+    this._settleStart = performance.now();
+    this._settleDuration = durationMs;
+    this._settleFrom = { ...this.current };
+    this._settleTarget = {
+      energy:     this.current.energy * 0.2,      // low but echoing
+      confidence: this.current.confidence,          // structural, unchanged
+      resistance: this.current.resistance * 0.4,    // doesn't fully release
+      engagement: this.current.engagement * 0.3,    // quiet presence
+      congruence: this.current.congruence,          // structural, unchanged
+      sentiment:  this.current.sentiment * 0.6,     // warmth carries forward
+    };
+    this.mode = 'hold';
+  }
 
   _animate() {
     this.t += 0.016;
 
-    // Smooth interpolation
-    for (const k of Object.keys(this.target)) {
-      if (typeof this.current[k] === 'number') {
-        this.current[k] += (this.target[k] - this.current[k]) * 0.04;
+    // Settling animation — smooth ease-out over duration
+    if (this._settling) {
+      const elapsed = performance.now() - this._settleStart;
+      const t = Math.min(1, elapsed / this._settleDuration);
+      const ease = 1 - Math.pow(1 - t, 3); // cubic ease-out
+      for (const k of Object.keys(this._settleTarget)) {
+        this.current[k] = this._settleFrom[k] + (this._settleTarget[k] - this._settleFrom[k]) * ease;
+      }
+      if (t >= 1) {
+        this._settling = false;
+        this.target = { ...this._settleTarget };
+      }
+    } else {
+      // Normal smooth interpolation
+      for (const k of Object.keys(this.target)) {
+        if (typeof this.current[k] === 'number') {
+          this.current[k] += (this.target[k] - this.current[k]) * 0.04;
+        }
       }
     }
 

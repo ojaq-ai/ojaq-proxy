@@ -250,19 +250,26 @@ async function start() {
 }
 
 function stop() {
+  const lastSignal = $signal.textContent || '';
+  const durationMs = conductor?.elapsed || 0;
+  const frameworkId = currentFramework.id;
+  const hadTurns = turnCount > 0;
+  const endSessionId = sessionId;
+
   // Log session end
-  if (sessionId && conductor) {
+  if (endSessionId && conductor) {
     fetch('/session/end', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        session_id: sessionId,
-        duration_ms: conductor.elapsed,
+        session_id: endSessionId,
+        duration_ms: durationMs,
         turns: turnCount,
-        framework: currentFramework.id,
+        framework: frameworkId,
       }),
     }).catch(() => {});
   }
+
   sessionId = null;
   turnCount = 0;
   running = false;
@@ -275,12 +282,123 @@ function stop() {
   $btnIcon.innerHTML = '&#9654;';
   $btnText.textContent = 'Start Session';
   $btn.classList.remove('stop');
-  $signal.textContent = '';
   $tUser.textContent = '';
   $tModel.textContent = '';
-  $emotionName.textContent = 'neutral';
+  $emotionName.textContent = '';
   setControlsEnabled(false);
   log('stopped');
+
+  // Show reflection if session had substance
+  if (hadTurns) {
+    showReflection(durationMs, lastSignal, frameworkId, endSessionId);
+  }
+}
+
+function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
+  // Settle orbs from wherever they are
+  avatar.settleToRest(2500);
+
+  const $ref = document.getElementById('reflection');
+  const $dur = document.getElementById('reflect-duration');
+  const $sig = document.getElementById('reflect-signal');
+  const $email = document.getElementById('reflect-email');
+  const $note = document.getElementById('reflect-wl-note');
+  const $fb = document.getElementById('reflect-fb');
+
+  // Duration: skip under 60s, otherwise "N minutes"
+  const mins = Math.floor(durationMs / 60000);
+  if (mins >= 1) {
+    $dur.textContent = `${mins} minute${mins > 1 ? 's' : ''}`;
+    $dur.style.display = '';
+  } else {
+    $dur.style.display = 'none';
+  }
+
+  // Signal: skip if empty
+  if (lastSignal.trim()) {
+    $sig.textContent = lastSignal;
+    $sig.style.display = '';
+  } else {
+    $sig.style.display = 'none';
+  }
+
+  // Reset fields
+  $email.value = '';
+  $note.textContent = '';
+  $fb.value = '';
+  $ref.style.display = 'flex';
+
+  // Hide controls + sidebar during reflection
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('sidebar').style.display = 'none';
+  document.getElementById('tabs').style.display = 'none';
+  document.getElementById('overlay').style.display = 'none';
+
+  // Waitlist email — submit on Enter
+  $email.onkeydown = async (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const email = $email.value.trim();
+    if (!email) return;
+
+    const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
+    if (sent.includes(email.toLowerCase())) {
+      $note.textContent = "You're already on the list.";
+      return;
+    }
+
+    try {
+      const r = await fetch('/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'post_session' }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        sent.push(email.toLowerCase());
+        localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
+        $email.style.display = 'none';
+        $note.textContent = "You're in. I'll find you when it's ready.";
+        // Log action
+        fetch('/session/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: endSessionId, action: 'waitlist' }),
+        }).catch(() => {});
+      }
+    } catch {
+      $note.textContent = 'Something went wrong. Try again.';
+    }
+  };
+
+  // Feedback — submit on Enter or blur if has content
+  const submitFeedback = async () => {
+    const text = $fb.value.trim();
+    if (!text) return;
+    try {
+      await fetch('/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          duration_s: Math.round(durationMs / 1000),
+          framework: frameworkId,
+        }),
+      });
+      $fb.value = '';
+      $fb.placeholder = 'Thank you.';
+      setTimeout(() => { $fb.placeholder = 'Anything you want me to know? (optional)'; }, 4000);
+      // Log action
+      fetch('/session/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: endSessionId, action: 'feedback' }),
+      }).catch(() => {});
+    } catch {}
+  };
+
+  $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFeedback(); } };
+  $fb.onblur = () => submitFeedback();
 }
 
 function setControlsEnabled(on) {

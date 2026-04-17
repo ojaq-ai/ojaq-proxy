@@ -368,6 +368,99 @@ main {
 
 #rate-close:hover { color: var(--text); }
 
+/* ── post-session reflection ── */
+#reflection {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 8, 12, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+#reflect-inner {
+  text-align: center;
+  max-width: 380px;
+  padding: 0 24px;
+}
+
+#reflect-duration {
+  font-size: 32px;
+  font-weight: 200;
+  color: #555;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+}
+
+#reflect-signal {
+  font-size: 15px;
+  font-weight: 300;
+  font-style: italic;
+  color: rgba(200, 200, 210, 0.7);
+  line-height: 1.6;
+  margin-bottom: 40px;
+}
+
+.reflect-cta {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.reflect-sub {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+#reflect-email {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: 40px;
+  border: 1px solid #2a2a36;
+  background: rgba(12, 12, 20, 0.8);
+  color: var(--text);
+  width: 260px;
+  outline: none;
+  text-align: center;
+}
+
+#reflect-email:focus { border-color: var(--accent); }
+
+#reflect-wl-note {
+  font-size: 12px;
+  color: var(--accent);
+  min-height: 18px;
+  margin-top: 8px;
+}
+
+#reflect-feedback {
+  margin-top: 28px;
+}
+
+#reflect-fb {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid #1a1a24;
+  background: rgba(12, 12, 20, 0.5);
+  color: #666;
+  width: 280px;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+#reflect-fb:focus { border-color: #333; color: var(--text); }
+
 /* ══════════════════════════════════════════════════════════════════════════
    MOBILE — the experience people will actually have
    ══════════════════════════════════════════════════════════════════════════ */

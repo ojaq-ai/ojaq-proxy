@@ -208,6 +208,41 @@ async def session_end(request: Request):
     return {"ok": True}
 
 
+FEEDBACK_FILE = _DATA_DIR / "feedback.jsonl"
+
+
+@app.post("/feedback")
+async def submit_feedback(request: Request):
+    body = await request.json()
+    text = (body.get("text") or "")[:500].strip()
+    if not text:
+        return {"ok": False}
+    entry = {
+        "feedback": text,
+        "duration_s": body.get("duration_s", 0),
+        "framework": body.get("framework", ""),
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+    with open(FEEDBACK_FILE, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    logger.info(f"FEEDBACK: {text[:80]}")
+    return {"ok": True}
+
+
+@app.post("/session/action")
+async def session_action(request: Request):
+    body = await request.json()
+    entry = {
+        "event": "post_session_action",
+        "session_id": body.get("session_id", ""),
+        "action": body.get("action", ""),
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+    with open(SESSIONS_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    return {"ok": True}
+
+
 ANALYZE_PROMPT = """\
 Analyze the emotional presence in this conversation turn.
 User said: "{user_text}"
