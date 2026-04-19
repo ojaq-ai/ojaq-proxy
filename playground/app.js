@@ -277,6 +277,8 @@ async function start() {
     };
     gemini.onOutputTranscript = (t) => {
       lastModelText += t;
+      // Strip any leaked [CMD:*] markers before display and before anything downstream (/analyze, /session/turn) sees them
+      lastModelText = lastModelText.replace(/\[CMD:[^\]]*\]/g, '').trim();
       $tModel.textContent = lastModelText;
     };
 
