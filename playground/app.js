@@ -55,6 +55,9 @@ function detectLanguage() {
 
 const userLanguage = detectLanguage();
 const langBase = userLanguage.split('-')[0];
+const presenceMode = new URLSearchParams(location.search).get('presence')
+  || localStorage.getItem('ojaq_presence')
+  || 'off';
 
 // ── i18n strings ────────────────────────────────────────────────────────
 const I18N = {
@@ -193,41 +196,55 @@ function flushCmdQueue() {
 
 // ── async presence analysis — runs parallel, never blocks voice ──────────
 async function analyzePresence(userText, modelText) {
-  try {
-    const resp = await fetch('/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: userText, model: modelText }),
-    });
-    if (!resp.ok) return;
-    const p = await resp.json();
-    if (p.error) return;
+  let p = null;
+  let emotion = '';
 
-    presenceHistory.push(p);
-    avatar.setPresence(p);
-    // Conductor updates UI only — never sends text to model automatically
-    if (conductor) conductor.onPresence(p, () => {});
+  // Presence pipeline — only when mode != 'off'
+  if (presenceMode !== 'off') {
+    try {
+      const resp = await fetch('/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: userText, model: modelText }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (!data.error) p = data;
+      }
+    } catch (e) {
+      // Presence analysis failed — don't interrupt anything
+    }
 
-    const { emotion, intensity } = mapEmotion(p);
-    // emotion label removed from UI
-    if (p.signal) $signal.textContent = p.signal;
-    updateBars();
-    log(`presence ${emotion} ${intensity} | e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
-    if (p.signal) log(`signal: ${p.signal}`);
+    if (p) {
+      presenceHistory.push(p);
+      avatar.setPresence(p);
+      // Conductor callback: gated by presenceMode — 'on' sends to model, 'dry' logs, else no-op
+      const conductorCallback =
+        presenceMode === 'on'  ? sendCmd :
+        presenceMode === 'dry' ? (cmd) => log(`[presence-dry] ${cmd}`) :
+                                 () => {};
+      if (conductor) conductor.onPresence(p, conductorCallback);
 
-    // Log turn for analytics
-    turnCount++;
-    fetch('/session/turn', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: sessionId, user: userText, model: modelText,
-        presence: p, emotion,
-      }),
-    }).catch(() => {});
-  } catch (e) {
-    // Presence analysis failed — don't interrupt anything
+      const { emotion: mappedEmotion, intensity } = mapEmotion(p);
+      emotion = mappedEmotion;
+      // emotion label removed from UI
+      if (p.signal) $signal.textContent = p.signal;
+      updateBars();
+      log(`presence ${emotion} ${intensity} | e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
+      if (p.signal) log(`signal: ${p.signal}`);
+    }
   }
+
+  // Turn analytics — always fires, regardless of presenceMode
+  turnCount++;
+  fetch('/session/turn', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session_id: sessionId, user: userText, model: modelText,
+      presence: p, emotion,
+    }),
+  }).catch(() => {});
 }
 
 // ── start / stop ────────────────────────────────────────────────────────
