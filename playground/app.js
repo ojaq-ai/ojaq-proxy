@@ -323,7 +323,10 @@ async function start() {
     timerInterval = setInterval(updateTimer, 1000);
 
     // opening greeting — small delay to ensure WS is fully ready
-    setTimeout(() => sendCmd('[CMD:start]'), 300);
+    setTimeout(() => {
+      sendCmd(`[CMD:lang:${langBase}]`);
+      sendCmd('[CMD:start]');
+    }, 300);
 
   } catch (err) {
     log(`start failed: ${err.message}`);
