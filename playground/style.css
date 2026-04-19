@@ -123,20 +123,29 @@ main {
   -webkit-box-orient: vertical;
 }
 
-/* ── sidebar (desktop) ── */
+/* ── sidebar → floating caption overlay (applies to mobile + desktop) ── */
 #sidebar {
-  width: 240px;
-  border-left: 1px solid var(--border);
-  background: var(--surface);
-  padding: 16px;
-  display: flex;
+  display: flex !important;
+  position: fixed;
+  bottom: 220px;                 /* desktop default — mobile override in @media */
+  left: 0; right: 0;
+  padding: 0 24px;
+  background: transparent;
+  border: none;
+  max-height: none;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 5;
   flex-direction: column;
-  gap: 20px;
-  overflow-y: auto;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 0;
 }
 
-#transcripts { display: flex; flex-direction: column; gap: 14px; }
+#transcripts { flex: initial; gap: 0; }
+#transcripts .t-block:first-child          { display: none; }   /* user's own words */
+#transcripts .t-block:last-child .t-label  { display: none; }   /* "ojaq" label */
+#sidebar #timer                            { display: none; }
+#sidebar #presence-bars                    { display: none; }
 
 .t-label {
   font-size: 9px;
@@ -157,8 +166,17 @@ main {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
-#t-user { color: #88aacc; }
-#t-model { color: #666; font-style: italic; }
+#t-user { color: #88aacc; }   /* dead code — user block hidden, kept for safety */
+#t-model {
+  color: rgba(230, 230, 240, 0.85);
+  font-size: 15px;
+  font-weight: 300;
+  font-style: normal;
+  line-height: 1.5;
+  text-align: center;
+  max-width: 640px;
+  max-height: 4.5em;
+}
 
 /* ── presence bars ── */
 #presence-bars {
@@ -470,37 +488,8 @@ main {
   /* Signal text floats above the floating button */
   #overlay       { bottom: calc(env(safe-area-inset-bottom, 0) + 88px); }
 
-  /* Sidebar becomes a transparent caption overlay — Ojaq transcript only */
-  #sidebar {
-    display: flex !important;
-    position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 0) + 156px);
-    left: 0; right: 0;
-    padding: 0 24px;
-    background: transparent;
-    border: none;
-    max-height: none;
-    overflow: visible;
-    pointer-events: none;
-    z-index: 5;
-    flex-direction: column;
-    gap: 0;
-  }
-  #transcripts                               { flex: initial; gap: 0; }
-  #transcripts .t-block:first-child          { display: none; }   /* user's own words */
-  #transcripts .t-block:last-child .t-label  { display: none; }   /* "ojaq" label */
-  #sidebar #timer                            { display: none; }
-  #sidebar #presence-bars                    { display: none; }
-
-  #t-model {
-    color: rgba(230, 230, 240, 0.85);
-    font-size: 15px;
-    font-weight: 300;
-    font-style: normal;
-    line-height: 1.5;
-    text-align: center;
-    max-height: 4.5em;
-  }
+  /* Sidebar caption overlay — mobile-specific bottom clears the floating start button */
+  #sidebar { bottom: calc(env(safe-area-inset-bottom, 0) + 156px); }
 }
 
 /* Extra small phones */
