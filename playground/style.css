@@ -438,6 +438,69 @@ main {
   /* Tabs scroll horizontally */
   nav#tabs { justify-content: flex-start; padding: 6px 8px; gap: 3px; }
   nav#tabs button { font-size: 10px; padding: 5px 12px; }
+
+  /* ── Orb-first reshape: hide chrome, float minimal caption + start button ─── */
+  nav#tabs       { display: none !important; }
+  #quick-cmds    { display: none; }
+  #trust         { display: none; }
+
+  #avatar-panel  { min-height: 100dvh; }
+
+  #controls {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
+    left: 0; right: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #controls #btn {
+    pointer-events: auto;
+    font-size: 12px;
+    letter-spacing: 2px;
+    padding: 14px 28px;
+    background: rgba(8, 8, 12, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  /* Signal text floats above the floating button */
+  #overlay       { bottom: calc(env(safe-area-inset-bottom, 0) + 88px); }
+
+  /* Sidebar becomes a transparent caption overlay — Ojaq transcript only */
+  #sidebar {
+    display: flex !important;
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0) + 156px);
+    left: 0; right: 0;
+    padding: 0 24px;
+    background: transparent;
+    border: none;
+    max-height: none;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 5;
+    flex-direction: column;
+    gap: 0;
+  }
+  #transcripts                               { flex: initial; gap: 0; }
+  #transcripts .t-block:first-child          { display: none; }   /* user's own words */
+  #transcripts .t-block:last-child .t-label  { display: none; }   /* "ojaq" label */
+  #sidebar #timer                            { display: none; }
+  #sidebar #presence-bars                    { display: none; }
+
+  #t-model {
+    color: rgba(230, 230, 240, 0.85);
+    font-size: 15px;
+    font-weight: 300;
+    font-style: normal;
+    line-height: 1.5;
+    text-align: center;
+    max-height: 4.5em;
+  }
 }
 
 /* Extra small phones */
