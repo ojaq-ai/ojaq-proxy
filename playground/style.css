@@ -127,7 +127,7 @@ main {
 #sidebar {
   display: flex !important;
   position: fixed;
-  bottom: 220px;                 /* desktop default — mobile override in @media */
+  bottom: 170px;                 /* desktop default — clears ~140px #controls bar with ~30px margin; mobile overrides in @media */
   left: 0; right: 0;
   padding: 0 24px;
   background: transparent;
@@ -391,19 +391,9 @@ main {
     min-height: 50vh;
   }
 
-  /* Sidebar becomes a compact strip */
-  #sidebar {
-    width: 100%;
-    border-left: none;
-    border-top: 1px solid var(--border);
-    flex-direction: row;
-    gap: 12px;
-    padding: 10px 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-shrink: 0;
-    max-height: 100px;
-  }
+  /* (Legacy "compact strip" sidebar rules removed — sidebar is now a
+     transparent caption overlay via global rules. The old border-top
+     here was rendering a stray hairline above the floating chrome.) */
 
   #transcripts {
     flex: 1;
