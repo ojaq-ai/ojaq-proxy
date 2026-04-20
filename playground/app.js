@@ -31,9 +31,26 @@ let running = false;
 let timerInterval = null;
 let sessionId = null;
 let turnCount = 0;
+let wakeLock = null;
 
 // ── logging ─────────────────────────────────────────────────────────────
 function log(msg) { console.log(`[ojaq] ${msg}`); }
+
+// ── screen wake lock — prevents mobile sleep from freezing a live session ──
+async function requestWakeLock() {
+  try {
+    if (!('wakeLock' in navigator)) { log('wake lock API not supported'); return; }
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => log('wake lock released'));
+  } catch (err) {
+    log(`wake lock failed: ${err.message}`);
+  }
+}
+
+// iOS Safari auto-releases the wake lock on tab visibility change; re-request on return
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && running) requestWakeLock();
+});
 
 // ── language detection ──────────────────────────────────────────────────
 function detectLanguage() {
@@ -319,6 +336,7 @@ async function start() {
     // go
     running = true;
     turnCount = 0;
+    await requestWakeLock();
     $btnIcon.innerHTML = '&#9632;';
     $btnText.textContent = 'End Session';
     $btn.classList.add('stop');
@@ -356,6 +374,8 @@ async function start() {
 }
 
 function stop() {
+  wakeLock?.release();
+  wakeLock = null;
   const lastSignal = $signal.textContent || '';
   const durationMs = conductor?.elapsed || 0;
   const frameworkId = currentFramework.id;

@@ -424,6 +424,17 @@ async def ws_endpoint(ws: WebSocket):
 
 # Static mount for playground (must come after all route definitions)
 PLAYGROUND = _ROOT / "playground"
+
+
+@app.get("/playground/manifest.json")
+async def playground_manifest():
+    """Serve PWA manifest with the correct MIME type (application/manifest+json)."""
+    return FileResponse(
+        PLAYGROUND / "manifest.json",
+        media_type="application/manifest+json",
+    )
+
+
 app.mount("/playground", StaticFiles(directory=PLAYGROUND, html=True), name="playground")
 
 
