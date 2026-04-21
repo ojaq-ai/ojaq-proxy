@@ -3,6 +3,7 @@
 import { FRAMEWORKS, assemblePrompt } from './frameworks.js';
 import { GeminiConnection } from './gemini.js';
 import { MicCapture, AudioPlayer, arrayBufToBase64 } from './audio.js';
+import { SortformerConnection } from './sortformer.js';
 import { Avatar } from './avatar.js';
 import { SessionConductor } from './conductor.js';
 import { mapEmotion, PresenceHistory } from './presence.js';
@@ -24,6 +25,8 @@ let currentFramework = FRAMEWORKS.coaching;
 let gemini = null;
 let mic = null;
 let player = null;
+let sortformer = null;
+let sortformerDropLogged = false;
 let avatar = null;
 let conductor = null;
 let presenceHistory = new PresenceHistory(20);
@@ -75,6 +78,9 @@ const langBase = userLanguage.split('-')[0];
 const presenceMode = new URLSearchParams(location.search).get('presence')
   || localStorage.getItem('ojaq_presence')
   || 'off';
+const speakersFlag = (new URLSearchParams(location.search).get('speakers')
+  || localStorage.getItem('ojaq_speakers')
+  || '0') === '1';
 
 // ── i18n strings ────────────────────────────────────────────────────────
 const I18N = {
@@ -329,7 +335,28 @@ async function start() {
     // audio
     player = new AudioPlayer();
     player.init();
-    mic = new MicCapture((buf) => gemini.sendAudio(arrayBufToBase64(buf)));
+
+    // Optional: Sortformer diarization tap — non-blocking, fire-and-forget connect.
+    // 16kHz PCM chunks are dropped silently until the WS opens.
+    let onChunk16k = null;
+    if (speakersFlag) {
+      sortformerDropLogged = false;
+      sortformer = new SortformerConnection();
+      sortformer.onOpen = () => log('[sortformer] connected');
+      sortformer.onProbs = (probs) => log(`[sortformer] probs=[${probs.map(p => p.toFixed(3)).join(', ')}]`);
+      sortformer.onClose = (code, reason) => log(`[sortformer] closed ${code} ${reason || ''}`);
+      sortformer.onError = (err) => log(`[sortformer] error: ${err?.message || err}`);
+      sortformer.connect();
+      onChunk16k = (buf) => {
+        if (!sortformer?.isOpen) {
+          if (!sortformerDropLogged) { log('[sortformer] dropping pcm — ws not open yet'); sortformerDropLogged = true; }
+          return;
+        }
+        sortformer.sendPcm(buf);
+      };
+    }
+
+    mic = new MicCapture((buf) => gemini.sendAudio(arrayBufToBase64(buf)), onChunk16k);
     await mic.start();
     log('mic active');
 
@@ -402,6 +429,7 @@ function stop() {
   mic?.stop(); mic = null;
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
+  sortformer?.close(); sortformer = null;
   conductor = null;
   clearInterval(timerInterval);
 
