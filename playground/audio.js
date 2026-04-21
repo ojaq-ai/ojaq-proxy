@@ -58,7 +58,7 @@ export class MicCapture {
     const src = this._ctx.createMediaStreamSource(this._stream);
 
     this._node24 = new AudioWorkletNode(this._ctx, 'pcm-capture', {
-      processorOptions: { targetRate: 24000, bufSize: 1200 },
+      processorOptions: { targetRate: 24000, bufSize: 720 }, // 30ms @ 24kHz — Gemini Live best-practice window
     });
     this._node24.port.onmessage = (e) => this.onChunk24k(e.data);
     src.connect(this._node24);
