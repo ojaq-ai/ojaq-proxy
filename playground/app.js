@@ -91,8 +91,8 @@ const frameworkParam = new URLSearchParams(location.search).get('framework')
 if (frameworkParam && FRAMEWORKS[frameworkParam]) {
   currentFramework = FRAMEWORKS[frameworkParam];
 }
-// Couple framework implies Sortformer — auto-activate even if URL omits ?speakers=1
-if (currentFramework.id === 'couple') speakersActive = true;
+// Together framework implies Sortformer — auto-activate even if URL omits ?speakers=1
+if (currentFramework.id === 'together') speakersActive = true;
 
 // ── i18n strings ────────────────────────────────────────────────────────
 const I18N = {
@@ -188,12 +188,12 @@ function renderTabs() {
     btn.addEventListener('click', () => {
       if (fw.id === currentFramework.id) return;
       if (running) stop();
-      const wasCouple = currentFramework.id === 'couple';
+      const wasTogether = currentFramework.id === 'together';
       currentFramework = fw;
-      if (fw.id === 'couple') {
+      if (fw.id === 'together') {
         speakersActive = true;
         prewarmSortformer();
-      } else if (wasCouple) {
+      } else if (wasTogether) {
         speakersActive = false;
         teardownSortformer();
       }
@@ -205,7 +205,7 @@ function renderTabs() {
 }
 renderTabs();
 
-// Pre-warm on URL-direct load to Couple (or explicit ?speakers=1) — cold-start overlaps with page read
+// Pre-warm on URL-direct load to Together (or explicit ?speakers=1) — cold-start overlaps with page read
 if (speakersActive) prewarmSortformer();
 
 // ── sparklines ──────────────────────────────────────────────────────────
