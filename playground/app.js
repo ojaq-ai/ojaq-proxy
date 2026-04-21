@@ -27,6 +27,7 @@ let mic = null;
 let player = null;
 let sortformer = null;
 let sortformerDropLogged = false;
+let sortformerReady = false;
 let lastEmittedSpeaker = null;
 let candidateSpeaker = null;
 let candidateFrames = 0;
@@ -157,14 +158,34 @@ avatar = new Avatar(document.getElementById('avatar-canvas'));
 function prewarmSortformer() {
   if (sortformer) return;
   sortformer = new SortformerConnection();
+  sortformer.onOpen = () => {
+    sortformerReady = true;
+    log('[sortformer] warmed');
+    if (!running) updateStartButton();
+  };
   sortformer.connect();
   log('[sortformer] pre-warming…');
+  updateStartButton();
 }
 
 function teardownSortformer() {
   sortformer?.close(); sortformer = null;
+  sortformerReady = false;
   avatar?.setSpeakerColor(null);
   lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
+  if (!running) updateStartButton();
+}
+
+// Reflect pre-warm state on the pre-session button. No-op while a session is active.
+function updateStartButton() {
+  if (running) return;
+  if (speakersActive && sortformer && !sortformerReady) {
+    $btn.disabled = true;
+    $btnText.textContent = 'Preparing...';
+  } else {
+    $btn.disabled = false;
+    $btnText.textContent = 'Start Session';
+  }
 }
 
 function syncUrl() {
@@ -391,7 +412,7 @@ async function start() {
     if (speakersActive) {
       sortformerDropLogged = false;
       if (!sortformer) sortformer = new SortformerConnection();
-      sortformer.onOpen = () => log('[sortformer] connected');
+      sortformer.onOpen = () => { sortformerReady = true; log('[sortformer] connected'); };
       sortformer.onProbs = (probs) => {
         log(`[sortformer] probs=[${probs.map(p => p.toFixed(3)).join(', ')}]`);
         // Debounced argmax → [CMD:speaker:N] on confident change
