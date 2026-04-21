@@ -27,6 +27,9 @@ let mic = null;
 let player = null;
 let sortformer = null;
 let sortformerDropLogged = false;
+let lastEmittedSpeaker = null;
+let candidateSpeaker = null;
+let candidateFrames = 0;
 let avatar = null;
 let conductor = null;
 let presenceHistory = new PresenceHistory(20);
@@ -343,7 +346,26 @@ async function start() {
       sortformerDropLogged = false;
       sortformer = new SortformerConnection();
       sortformer.onOpen = () => log('[sortformer] connected');
-      sortformer.onProbs = (probs) => log(`[sortformer] probs=[${probs.map(p => p.toFixed(3)).join(', ')}]`);
+      sortformer.onProbs = (probs) => {
+        log(`[sortformer] probs=[${probs.map(p => p.toFixed(3)).join(', ')}]`);
+        // Debounced argmax → [CMD:speaker:N] on confident change
+        let maxIdx = 0, maxVal = probs[0] ?? 0;
+        for (let i = 1; i < probs.length; i++) {
+          if (probs[i] > maxVal) { maxVal = probs[i]; maxIdx = i; }
+        }
+        if (maxVal < 0.5) return;
+        if (maxIdx === candidateSpeaker) {
+          candidateFrames++;
+        } else {
+          candidateSpeaker = maxIdx;
+          candidateFrames = 1;
+        }
+        if (candidateFrames >= 3 && candidateSpeaker !== lastEmittedSpeaker) {
+          sendCmd(`[CMD:speaker:${candidateSpeaker}]`);
+          log(`[sortformer] speaker change -> ${candidateSpeaker}`);
+          lastEmittedSpeaker = candidateSpeaker;
+        }
+      };
       sortformer.onClose = (code, reason) => log(`[sortformer] closed ${code} ${reason || ''}`);
       sortformer.onError = (err) => log(`[sortformer] error: ${err?.message || err}`);
       sortformer.connect();
@@ -430,6 +452,7 @@ function stop() {
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
   sortformer?.close(); sortformer = null;
+  lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
   conductor = null;
   clearInterval(timerInterval);
 
