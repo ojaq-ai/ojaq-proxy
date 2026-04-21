@@ -82,7 +82,7 @@ const langBase = userLanguage.split('-')[0];
 const presenceMode = new URLSearchParams(location.search).get('presence')
   || localStorage.getItem('ojaq_presence')
   || 'off';
-const speakersFlag = (new URLSearchParams(location.search).get('speakers')
+let speakersActive = (new URLSearchParams(location.search).get('speakers')
   || localStorage.getItem('ojaq_speakers')
   || '0') === '1';
 
@@ -91,6 +91,8 @@ const frameworkParam = new URLSearchParams(location.search).get('framework')
 if (frameworkParam && FRAMEWORKS[frameworkParam]) {
   currentFramework = FRAMEWORKS[frameworkParam];
 }
+// Couple framework implies Sortformer — auto-activate even if URL omits ?speakers=1
+if (currentFramework.id === 'couple') speakersActive = true;
 
 // ── i18n strings ────────────────────────────────────────────────────────
 const I18N = {
@@ -151,6 +153,30 @@ const t = I18N[langBase] || I18N.en;
 // ── avatar init ─────────────────────────────────────────────────────────
 avatar = new Avatar(document.getElementById('avatar-canvas'));
 
+// ── sortformer pre-warm / teardown helpers ──────────────────────────────
+function prewarmSortformer() {
+  if (sortformer) return;
+  sortformer = new SortformerConnection();
+  sortformer.connect();
+  log('[sortformer] pre-warming…');
+}
+
+function teardownSortformer() {
+  sortformer?.close(); sortformer = null;
+  avatar?.setSpeakerColor(null);
+  lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
+}
+
+function syncUrl() {
+  const params = new URLSearchParams(location.search);
+  if (currentFramework.id !== 'coaching') params.set('framework', currentFramework.id);
+  else params.delete('framework');
+  if (speakersActive) params.set('speakers', '1');
+  else params.delete('speakers');
+  const qs = params.toString();
+  history.replaceState(null, '', `${location.pathname}${qs ? '?' + qs : ''}${location.hash}`);
+}
+
 // ── framework tabs ──────────────────────────────────────────────────────
 function renderTabs() {
   $tabs.innerHTML = '';
@@ -160,14 +186,27 @@ function renderTabs() {
     btn.className = fw.id === currentFramework.id ? 'active' : '';
     btn.style.borderColor = fw.id === currentFramework.id ? fw.color : '';
     btn.addEventListener('click', () => {
+      if (fw.id === currentFramework.id) return;
       if (running) stop();
+      const wasCouple = currentFramework.id === 'couple';
       currentFramework = fw;
+      if (fw.id === 'couple') {
+        speakersActive = true;
+        prewarmSortformer();
+      } else if (wasCouple) {
+        speakersActive = false;
+        teardownSortformer();
+      }
+      syncUrl();
       renderTabs();
     });
     $tabs.appendChild(btn);
   }
 }
 renderTabs();
+
+// Pre-warm on URL-direct load to Couple (or explicit ?speakers=1) — cold-start overlaps with page read
+if (speakersActive) prewarmSortformer();
 
 // ── sparklines ──────────────────────────────────────────────────────────
 // Dimension-specific colors
@@ -349,9 +388,9 @@ async function start() {
     // Optional: Sortformer diarization tap — non-blocking, fire-and-forget connect.
     // 16kHz PCM chunks are dropped silently until the WS opens.
     let onChunk16k = null;
-    if (speakersFlag) {
+    if (speakersActive) {
       sortformerDropLogged = false;
-      sortformer = new SortformerConnection();
+      if (!sortformer) sortformer = new SortformerConnection();
       sortformer.onOpen = () => log('[sortformer] connected');
       sortformer.onProbs = (probs) => {
         log(`[sortformer] probs=[${probs.map(p => p.toFixed(3)).join(', ')}]`);
@@ -459,9 +498,7 @@ function stop() {
   mic?.stop(); mic = null;
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
-  sortformer?.close(); sortformer = null;
-  lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
-  avatar?.setSpeakerColor(null);
+  teardownSortformer();
   conductor = null;
   clearInterval(timerInterval);
 

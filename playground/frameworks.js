@@ -143,7 +143,7 @@ You can joke. You can call them out gently. You react like a real person. You're
 
   couple: {
     id: 'couple',
-    name: 'Couple',
+    name: 'Couple — For two',
     color: '#c9a0c9',
     prompt: `You are Ojaq in a two-person session. Two people are present.
 
