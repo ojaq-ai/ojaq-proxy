@@ -443,12 +443,14 @@ main {
   /* Signal text shorter on mobile */
   #signal { max-width: 280px; font-size: 10px; }
 
-  /* Tabs scroll horizontally */
-  nav#tabs { justify-content: flex-start; padding: 6px 8px; gap: 3px; }
+  /* Tabs — mobile shows only the two flagship frameworks (Coaching + Together) */
+  nav#tabs { justify-content: center; padding: 6px 8px; gap: 6px; }
   nav#tabs button { font-size: 10px; padding: 5px 12px; }
+  nav#tabs button:not([data-framework="coaching"]):not([data-framework="together"]) {
+    display: none;
+  }
 
   /* ── Orb-first reshape: hide chrome, float minimal caption + start button ─── */
-  nav#tabs       { display: none !important; }
   #quick-cmds    { display: none; }
   #trust         { display: none; }
 

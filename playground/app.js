@@ -204,6 +204,7 @@ function renderTabs() {
   for (const fw of Object.values(FRAMEWORKS)) {
     const btn = document.createElement('button');
     btn.textContent = fw.name;
+    btn.dataset.framework = fw.id;
     btn.className = fw.id === currentFramework.id ? 'active' : '';
     btn.style.borderColor = fw.id === currentFramework.id ? fw.color : '';
     btn.addEventListener('click', () => {
