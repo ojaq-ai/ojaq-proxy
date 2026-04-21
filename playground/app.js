@@ -30,6 +30,7 @@ let sortformerDropLogged = false;
 let lastEmittedSpeaker = null;
 let candidateSpeaker = null;
 let candidateFrames = 0;
+const SPEAKER_COLORS = ['#c9a0c9', '#a0c9c9', '#c9c9a0', '#c9b0a0'];
 let avatar = null;
 let conductor = null;
 let presenceHistory = new PresenceHistory(20);
@@ -368,6 +369,7 @@ async function start() {
         }
         if (candidateFrames >= 3 && candidateSpeaker !== lastEmittedSpeaker) {
           sendCmd(`[CMD:speaker:${candidateSpeaker}]`);
+          avatar.setSpeakerColor(SPEAKER_COLORS[candidateSpeaker]);
           log(`[sortformer] speaker change -> ${candidateSpeaker}`);
           lastEmittedSpeaker = candidateSpeaker;
         }
@@ -459,6 +461,7 @@ function stop() {
   gemini?.close(); gemini = null;
   sortformer?.close(); sortformer = null;
   lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
+  avatar?.setSpeakerColor(null);
   conductor = null;
   clearInterval(timerInterval);
 
