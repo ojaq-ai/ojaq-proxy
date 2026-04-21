@@ -85,6 +85,12 @@ const speakersFlag = (new URLSearchParams(location.search).get('speakers')
   || localStorage.getItem('ojaq_speakers')
   || '0') === '1';
 
+const frameworkParam = new URLSearchParams(location.search).get('framework')
+  || localStorage.getItem('ojaq_framework');
+if (frameworkParam && FRAMEWORKS[frameworkParam]) {
+  currentFramework = FRAMEWORKS[frameworkParam];
+}
+
 // ── i18n strings ────────────────────────────────────────────────────────
 const I18N = {
   en: {
