@@ -262,6 +262,8 @@ main {
   line-height: 1.5;
   width: 100%;
 }
+#trust a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+#trust a:hover { color: var(--text); }
 
 #quick-cmds {
   display: flex;
