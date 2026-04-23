@@ -92,8 +92,9 @@ const frameworkParam = new URLSearchParams(location.search).get('framework')
 if (frameworkParam && FRAMEWORKS[frameworkParam]) {
   currentFramework = FRAMEWORKS[frameworkParam];
 }
-// Together framework implies Sortformer — auto-activate even if URL omits ?speakers=1
-if (currentFramework.id === 'together') speakersActive = true;
+// Two-person frameworks imply Sortformer — auto-activate even if URL omits ?speakers=1
+const SPEAKER_FRAMEWORKS = new Set(['together', 'meet']);
+if (SPEAKER_FRAMEWORKS.has(currentFramework.id)) speakersActive = true;
 
 // ── i18n strings ────────────────────────────────────────────────────────
 const I18N = {
@@ -210,12 +211,13 @@ function renderTabs() {
     btn.addEventListener('click', () => {
       if (fw.id === currentFramework.id) return;
       if (running) stop();
-      const wasTogether = currentFramework.id === 'together';
+      const wasSpeakerFw = SPEAKER_FRAMEWORKS.has(currentFramework.id);
+      const isSpeakerFw = SPEAKER_FRAMEWORKS.has(fw.id);
       currentFramework = fw;
-      if (fw.id === 'together') {
+      if (isSpeakerFw) {
         speakersActive = true;
-        prewarmSortformer();
-      } else if (wasTogether) {
+        prewarmSortformer(); // no-op if already open — keeps WS warm across together↔meet switch
+      } else if (wasSpeakerFw) {
         speakersActive = false;
         teardownSortformer();
       }
@@ -227,7 +229,7 @@ function renderTabs() {
 }
 renderTabs();
 
-// Pre-warm on URL-direct load to Together (or explicit ?speakers=1) — cold-start overlaps with page read
+// Pre-warm on URL-direct load to a two-person framework (or explicit ?speakers=1) — cold-start overlaps with page read
 if (speakersActive) prewarmSortformer();
 
 // ── sparklines ──────────────────────────────────────────────────────────
