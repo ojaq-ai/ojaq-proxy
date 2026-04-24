@@ -228,11 +228,19 @@ function sendCmd(text) {
 
 function flushCmdQueue() {
   if (!gemini || cmdQueue.length === 0) return;
-  // Only send the last command of each type — skip stale ones
-  const last = cmdQueue[cmdQueue.length - 1];
+  // Dedupe by verb type — keep most recent of each.
+  // Verbs: speaker, speakers, phase, focus, lang, start, ...
+  const byVerb = new Map();
+  for (const cmd of cmdQueue) {
+    const match = cmd.match(/^\[CMD:([^:\]]+)/);
+    const verb = match ? match[1] : cmd;
+    byVerb.set(verb, cmd); // Map preserves insertion order; overwrite keeps latest
+  }
   cmdQueue = [];
-  gemini.sendText(last);
-  log(`-> ${last}`);
+  for (const cmd of byVerb.values()) {
+    gemini.sendText(cmd);
+    log(`-> ${cmd}`);
+  }
 }
 
 // ── async presence analysis — runs parallel, never blocks voice ──────────
@@ -329,6 +337,11 @@ async function start() {
       // Fire async presence analysis with full turn text
       if (lastUserText) {
         analyzePresence(lastUserText, lastModelText);
+      }
+      // Re-assert current dominant speaker so Gemini's context doesn't drift
+      // during long replies when no speaker change occurred
+      if (lastEmittedSpeaker !== null) {
+        sendCmd(`[CMD:speaker:${lastEmittedSpeaker}]`);
       }
       // Reset for next turn
       lastUserText = '';
