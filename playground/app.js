@@ -608,6 +608,16 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
   $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFeedback(); } };
   $fb.onblur = () => submitFeedback();
   $fbSubmit.onclick = submitFeedback;
+
+  // "Another session" — dismiss the overlay, restore playground chrome
+  const $another = document.getElementById('reflect-another');
+  $another.style.display = '';
+  $another.onclick = () => {
+    $ref.style.display = 'none';
+    showNormalUI();
+    document.getElementById('overlay').style.display = '';
+    $signal.textContent = ''; // clear stale signal from prior session
+  };
 }
 
 function setControlsEnabled(on) {
@@ -715,6 +725,9 @@ function showExperiencedState() {
   $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFb(); } };
   $fb.onblur = () => submitFb();
   $fbSubmit.onclick = submitFb;
+
+  // Hide "Another session" — user is rate-limited, starting another would just fail
+  document.getElementById('reflect-another').style.display = 'none';
 }
 
 // ── page load: check rate limit status before showing UI ────────────────

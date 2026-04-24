@@ -408,6 +408,27 @@ main {
 
 #reflect-fb:focus { border-color: #333; color: var(--text); }
 
+#reflect-more {
+  margin-top: 36px;
+  text-align: center;
+}
+#reflect-another {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  transition: color 0.2s;
+}
+#reflect-another:hover { color: var(--text); }
+
 /* ══════════════════════════════════════════════════════════════════════════
    MOBILE — the experience people will actually have
    ══════════════════════════════════════════════════════════════════════════ */
