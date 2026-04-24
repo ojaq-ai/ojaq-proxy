@@ -354,6 +354,33 @@ main {
 
 #reflect-email:focus { border-color: var(--accent); }
 
+.reflect-input-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.reflect-submit {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  border-radius: 40px;
+  border: 1px solid #2a2a36;
+  background: rgba(12, 12, 20, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.reflect-submit:hover { color: var(--text); border-color: var(--accent); }
+.reflect-submit:disabled { opacity: 0.4; cursor: default; }
+
 #reflect-wl-note {
   font-size: 12px;
   color: var(--accent);

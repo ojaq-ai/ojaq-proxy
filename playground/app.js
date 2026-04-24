@@ -96,62 +96,6 @@ if (frameworkParam && FRAMEWORKS[frameworkParam]) {
 const SPEAKER_FRAMEWORKS = new Set(['together', 'meet']);
 if (SPEAKER_FRAMEWORKS.has(currentFramework.id)) speakersActive = true;
 
-// ── i18n strings ────────────────────────────────────────────────────────
-const I18N = {
-  en: {
-    cta: 'Want to continue this?',
-    sub: "The mobile app is where Ojaq goes deeper. I'll email you when it's ready.",
-    fbPlaceholder: 'Anything you want me to know? (optional)',
-    success: "You're in. I'll find you when it's ready.",
-    thanks: 'Thank you.',
-    expTitle: "You've spent time with Ojaq today.",
-    expSub: "The mobile app is where it goes deeper. I'll find you when it's ready.",
-    minutes: (n) => `${n} minute${n > 1 ? 's' : ''}`,
-  },
-  tr: {
-    cta: 'Devam etmek ister misin?',
-    sub: "Mobil uygulama, Ojaq'in daha derine indigi yer. Hazir oldugunda sana yazarim.",
-    fbPlaceholder: 'Bana soylemek istedigin bir sey var mi? (istege bagli)',
-    success: 'Listeye girdin. Hazir oldugunda seni bulurum.',
-    thanks: 'Tesekkur ederim.',
-    expTitle: "Bugun Ojaq ile zaman gecirdin.",
-    expSub: "Mobil uygulama, Ojaq'in daha derine indigi yer. Hazir oldugunda seni bulurum.",
-    minutes: (n) => `${n} dakika`,
-  },
-  de: {
-    cta: 'Mochtest du das fortsetzen?',
-    sub: 'Die mobile App ist der Ort, an dem Ojaq tiefer geht. Ich schreibe dir, wenn sie bereit ist.',
-    fbPlaceholder: 'Mochtest du mir etwas mitteilen? (optional)',
-    success: 'Du bist dabei. Ich melde mich, wenn es soweit ist.',
-    thanks: 'Danke.',
-    expTitle: 'Du hast heute Zeit mit Ojaq verbracht.',
-    expSub: 'Die mobile App ist der Ort, an dem Ojaq tiefer geht. Ich finde dich, wenn sie bereit ist.',
-    minutes: (n) => `${n} Minute${n > 1 ? 'n' : ''}`,
-  },
-  es: {
-    cta: 'Quieres continuar esto?',
-    sub: 'La aplicacion movil es donde Ojaq va mas profundo. Te escribire cuando este lista.',
-    fbPlaceholder: 'Algo que quieras decirme? (opcional)',
-    success: 'Estas dentro. Te encontrare cuando este lista.',
-    thanks: 'Gracias.',
-    expTitle: 'Has pasado tiempo con Ojaq hoy.',
-    expSub: 'La aplicacion movil es donde va mas profundo. Te encontrare cuando este lista.',
-    minutes: (n) => `${n} minuto${n > 1 ? 's' : ''}`,
-  },
-  fr: {
-    cta: 'Veux-tu continuer?',
-    sub: "L'application mobile, c'est la ou Ojaq va plus loin. Je t'ecrirai quand elle sera prete.",
-    fbPlaceholder: 'Quelque chose a me dire? (facultatif)',
-    success: "Tu es sur la liste. Je te retrouverai quand ce sera pret.",
-    thanks: 'Merci.',
-    expTitle: "Tu as passe du temps avec Ojaq aujourd'hui.",
-    expSub: "L'application mobile, c'est la ou ca va plus loin. Je te retrouverai quand ce sera pret.",
-    minutes: (n) => `${n} minute${n > 1 ? 's' : ''}`,
-  },
-};
-
-const t = I18N[langBase] || I18N.en;
-
 // ── avatar init ─────────────────────────────────────────────────────────
 avatar = new Avatar(document.getElementById('avatar-canvas'));
 
@@ -548,24 +492,19 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
   const $dur = document.getElementById('reflect-duration');
   const $sig = document.getElementById('reflect-signal');
   const $email = document.getElementById('reflect-email');
+  const $emailSubmit = document.getElementById('reflect-email-submit');
   const $note = document.getElementById('reflect-wl-note');
   const $fb = document.getElementById('reflect-fb');
+  const $fbSubmit = document.getElementById('reflect-fb-submit');
 
   // Duration: skip under 60s
   const mins = Math.floor(durationMs / 60000);
   if (mins >= 1) {
-    $dur.textContent = t.minutes(mins);
+    $dur.textContent = `${mins} minute${mins > 1 ? 's' : ''}`;
     $dur.style.display = '';
   } else {
     $dur.style.display = 'none';
   }
-
-  // Set i18n copy
-  const cta = $ref.querySelector('.reflect-cta');
-  const sub = $ref.querySelector('.reflect-sub');
-  if (cta) cta.textContent = t.cta;
-  if (sub) sub.textContent = t.sub;
-  $fb.placeholder = t.fbPlaceholder;
 
   // Signal: skip if empty
   if (lastSignal.trim()) {
@@ -575,8 +514,18 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
     $sig.style.display = 'none';
   }
 
-  // Reset fields
+  // Restore waitlist copy (showExperiencedState may have overwritten it in a prior render)
+  const wl = document.getElementById('reflect-waitlist');
+  const wlCta = wl.querySelector('.reflect-cta');
+  const wlSub = wl.querySelector('.reflect-sub');
+  if (wlCta) wlCta.textContent = 'Want to continue this?';
+  if (wlSub) wlSub.textContent = "The mobile app is where Ojaq goes deeper. I'll email you when it's ready.";
+
+  // Reset fields + re-show inputs/buttons in case a prior session hid them on success
   $email.value = '';
+  $email.style.display = '';
+  $emailSubmit.style.display = '';
+  $emailSubmit.disabled = false;
   $note.textContent = '';
   $fb.value = '';
   $ref.style.display = 'flex';
@@ -587,10 +536,8 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
   document.getElementById('tabs').style.display = 'none';
   document.getElementById('overlay').style.display = 'none';
 
-  // Waitlist email — submit on Enter
-  $email.onkeydown = async (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
+  // Waitlist email — submit on Enter or button click
+  const submitEmail = async () => {
     const email = $email.value.trim();
     if (!email) return;
 
@@ -600,6 +547,7 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
       return;
     }
 
+    $emailSubmit.disabled = true;
     try {
       const r = await fetch('/waitlist', {
         method: 'POST',
@@ -611,20 +559,27 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
         sent.push(email.toLowerCase());
         localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
         $email.style.display = 'none';
-        $note.textContent = t.success;
+        $emailSubmit.style.display = 'none';
+        $note.textContent = "You're in. I'll find you when it's ready.";
         // Log action
         fetch('/session/action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: endSessionId, action: 'waitlist' }),
         }).catch(() => {});
+      } else {
+        $emailSubmit.disabled = false;
       }
     } catch {
       $note.textContent = 'Something went wrong. Try again.';
+      $emailSubmit.disabled = false;
     }
   };
 
-  // Feedback — submit on Enter or blur if has content
+  $email.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitEmail(); } };
+  $emailSubmit.onclick = submitEmail;
+
+  // Feedback — submit on Enter, blur, or button click
   const submitFeedback = async () => {
     const text = $fb.value.trim();
     if (!text) return;
@@ -639,8 +594,8 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
         }),
       });
       $fb.value = '';
-      $fb.placeholder = t.thanks;
-      setTimeout(() => { $fb.placeholder = t.fbPlaceholder; }, 4000);
+      $fb.placeholder = 'Thank you.';
+      setTimeout(() => { $fb.placeholder = 'What sticks with you?'; }, 4000);
       // Log action
       fetch('/session/action', {
         method: 'POST',
@@ -652,6 +607,7 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
 
   $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFeedback(); } };
   $fb.onblur = () => submitFeedback();
+  $fbSubmit.onclick = submitFeedback;
 }
 
 function setControlsEnabled(on) {
@@ -684,28 +640,30 @@ function showExperiencedState() {
   const $dur = document.getElementById('reflect-duration');
   const $sig = document.getElementById('reflect-signal');
   const $email = document.getElementById('reflect-email');
+  const $emailSubmit = document.getElementById('reflect-email-submit');
   const $note = document.getElementById('reflect-wl-note');
   const $fb = document.getElementById('reflect-fb');
+  const $fbSubmit = document.getElementById('reflect-fb-submit');
 
   $dur.style.display = 'none';
   $sig.style.display = 'none';
 
-  // Override waitlist copy
-  const cta = $ref.querySelector('.reflect-cta');
-  const sub = $ref.querySelector('.reflect-sub');
-  if (cta) cta.textContent = t.expTitle;
-  if (sub) sub.textContent = t.expSub;
+  // Override waitlist block copy for the rate-limited state
+  const wl = document.getElementById('reflect-waitlist');
+  const cta = wl.querySelector('.reflect-cta');
+  const sub = wl.querySelector('.reflect-sub');
+  if (cta) cta.textContent = "You've spent time with Ojaq today.";
+  if (sub) sub.textContent = "The mobile app is where it goes deeper. I'll find you when it's ready.";
 
   $email.value = '';
+  $email.style.display = '';
+  $emailSubmit.style.display = '';
+  $emailSubmit.disabled = false;
   $note.textContent = '';
   $fb.value = '';
-  $fb.placeholder = t.fbPlaceholder;
   $ref.style.display = 'flex';
 
-  // Email — submit on Enter
-  $email.onkeydown = async (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
+  const submitEmail = async () => {
     const email = $email.value.trim();
     if (!email) return;
 
@@ -715,6 +673,7 @@ function showExperiencedState() {
       return;
     }
 
+    $emailSubmit.disabled = true;
     try {
       const r = await fetch('/waitlist', {
         method: 'POST',
@@ -726,14 +685,19 @@ function showExperiencedState() {
         sent.push(email.toLowerCase());
         localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
         $email.style.display = 'none';
-        $note.textContent = t.success;
+        $emailSubmit.style.display = 'none';
+        $note.textContent = "You're in. I'll find you when it's ready.";
+      } else {
+        $emailSubmit.disabled = false;
       }
     } catch {
       $note.textContent = 'Something went wrong. Try again.';
+      $emailSubmit.disabled = false;
     }
   };
+  $email.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitEmail(); } };
+  $emailSubmit.onclick = submitEmail;
 
-  // Feedback
   const submitFb = async () => {
     const text = $fb.value.trim();
     if (!text) return;
@@ -744,12 +708,13 @@ function showExperiencedState() {
         body: JSON.stringify({ text, duration_s: 0, framework: 'rate_limit' }),
       });
       $fb.value = '';
-      $fb.placeholder = t.thanks;
-      setTimeout(() => { $fb.placeholder = t.fbPlaceholder; }, 4000);
+      $fb.placeholder = 'Thank you.';
+      setTimeout(() => { $fb.placeholder = 'What sticks with you?'; }, 4000);
     } catch {}
   };
   $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFb(); } };
   $fb.onblur = () => submitFb();
+  $fbSubmit.onclick = submitFb;
 }
 
 // ── page load: check rate limit status before showing UI ────────────────
