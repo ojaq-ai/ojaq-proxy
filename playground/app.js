@@ -31,6 +31,7 @@ let sortformerReady = false;
 let lastEmittedSpeaker = null;
 let candidateSpeaker = null;
 let candidateFrames = 0;
+let lastSortformerSpeechMs = 0; // timestamp of last non-trivial Sortformer activity (max prob >= 0.3)
 const SPEAKER_COLORS = ['#c9a0c9', '#a0c9c9', '#c9c9a0', '#c9b0a0'];
 let avatar = null;
 let conductor = null;
@@ -119,6 +120,7 @@ function teardownSortformer() {
   sortformerReady = false;
   avatar?.setSpeakerColor(null);
   lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
+  lastSortformerSpeechMs = 0;
   if (!running) updateStartButton();
 }
 
@@ -339,9 +341,13 @@ async function start() {
         analyzePresence(lastUserText, lastModelText);
       }
       // Re-assert current dominant speaker so Gemini's context doesn't drift
-      // during long replies. GATED on lastUserText so spurious turnCompletes
-      // during silence (VAD flicker on ambient noise) don't re-emit speaker events.
-      if (lastUserText && lastEmittedSpeaker !== null) {
+      // during long replies. THREE gates:
+      //   1) lastUserText — rules out spurious turnCompletes with empty transcripts.
+      //   2) lastEmittedSpeaker — skip until Sortformer has confirmed at least one speaker.
+      //   3) Sortformer activity within last 3s — rules out cases where Gemini's ASR
+      //      transcribes ambient noise as a short string (non-empty text but no real speech).
+      const recentSpeech = Date.now() - lastSortformerSpeechMs < 3000;
+      if (lastUserText && lastEmittedSpeaker !== null && recentSpeech) {
         sendCmd(`[CMD:speaker:${lastEmittedSpeaker}]`);
         log(`[speaker] turn-reassertion -> ${lastEmittedSpeaker}`);
       }
@@ -383,6 +389,9 @@ async function start() {
         for (let i = 1; i < probs.length; i++) {
           if (probs[i] > maxVal) { maxVal = probs[i]; maxIdx = i; }
         }
+        // Track any non-trivial speech activity (below the 0.65 confident-change threshold but above true silence)
+        // so the onTurnComplete re-assertion gate can tell if someone's actually been speaking recently.
+        if (maxVal >= 0.3) lastSortformerSpeechMs = Date.now();
         if (maxVal < 0.65) return;
         if (maxIdx === candidateSpeaker) {
           candidateFrames++;
@@ -405,6 +414,7 @@ async function start() {
         lastEmittedSpeaker = null;
         candidateSpeaker = null;
         candidateFrames = 0;
+        lastSortformerSpeechMs = 0;
         avatar?.setSpeakerColor(null);
       };
       sortformer.onError = (err) => log(`[sortformer] error: ${err?.message || err}`);
