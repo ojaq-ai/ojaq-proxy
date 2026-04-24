@@ -17,7 +17,7 @@
 <body>
 
 <!-- ── framework tabs ── -->
-<nav id="tabs" style="display:none"></nav>
+<nav id="tabs"></nav>
 
 <!-- ── main area ── -->
 <main>
@@ -63,7 +63,7 @@
 <!-- ── controls ── -->
 <footer id="controls" style="display:none">
   <button id="btn"><span id="btn-icon">&#9654;</span> <span id="btn-text">Start Session</span></button>
-  <p id="trust">Your voice isn't stored. Not recorded, not trained on, not kept. When the session ends, it's gone.</p>
+  <p id="trust">We don't keep what you said. <a href="/privacy">How it works</a></p>
   <div id="quick-cmds">
     <button data-cmd="[CMD:focus:career]">Career</button>
     <button data-cmd="[CMD:focus:relationships]">Relationships</button>
@@ -83,11 +83,22 @@
     <div id="reflect-waitlist">
       <p class="reflect-cta">Want to continue this?</p>
       <p class="reflect-sub">The mobile app is where Ojaq goes deeper. I'll email you when it's ready.</p>
-      <input type="email" id="reflect-email" placeholder="your@email.com">
+      <div class="reflect-input-row">
+        <input type="email" id="reflect-email" placeholder="your@email.com">
+        <button type="button" id="reflect-email-submit" class="reflect-submit">Join</button>
+      </div>
       <p id="reflect-wl-note"></p>
     </div>
     <div id="reflect-feedback">
-      <input type="text" id="reflect-fb" placeholder="Anything you want me to know? (optional)">
+      <p class="reflect-cta">Anything you want me to know?</p>
+      <p class="reflect-sub">Optional.</p>
+      <div class="reflect-input-row">
+        <input type="text" id="reflect-fb" placeholder="What sticks with you?">
+        <button type="button" id="reflect-fb-submit" class="reflect-submit">Send</button>
+      </div>
+    </div>
+    <div id="reflect-more">
+      <button type="button" id="reflect-another">Another session</button>
     </div>
   </div>
 </div>

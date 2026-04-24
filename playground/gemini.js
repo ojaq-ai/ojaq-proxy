@@ -120,6 +120,13 @@ export class GeminiConnection {
   }
 
   close() {
-    if (this.ws) { this.ws.close(); this.ws = null; }
+    if (this.ws) {
+      // Unbind onclose FIRST — prevents the delayed close event from firing
+      // the consumer's onClose callback after a new session has started and
+      // set running=true, which would erroneously trigger stop() on the new session.
+      this.ws.onclose = null;
+      this.ws.close();
+      this.ws = null;
+    }
   }
 }

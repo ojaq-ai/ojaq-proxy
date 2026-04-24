@@ -262,6 +262,8 @@ main {
   line-height: 1.5;
   width: 100%;
 }
+#trust a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+#trust a:hover { color: var(--text); }
 
 #quick-cmds {
   display: flex;
@@ -352,6 +354,33 @@ main {
 
 #reflect-email:focus { border-color: var(--accent); }
 
+.reflect-input-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.reflect-submit {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  border-radius: 40px;
+  border: 1px solid #2a2a36;
+  background: rgba(12, 12, 20, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.reflect-submit:hover { color: var(--text); border-color: var(--accent); }
+.reflect-submit:disabled { opacity: 0.4; cursor: default; }
+
 #reflect-wl-note {
   font-size: 12px;
   color: var(--accent);
@@ -378,6 +407,27 @@ main {
 }
 
 #reflect-fb:focus { border-color: #333; color: var(--text); }
+
+#reflect-more {
+  margin-top: 36px;
+  text-align: center;
+}
+#reflect-another {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  transition: color 0.2s;
+}
+#reflect-another:hover { color: var(--text); }
 
 /* ══════════════════════════════════════════════════════════════════════════
    MOBILE — the experience people will actually have
@@ -443,12 +493,14 @@ main {
   /* Signal text shorter on mobile */
   #signal { max-width: 280px; font-size: 10px; }
 
-  /* Tabs scroll horizontally */
-  nav#tabs { justify-content: flex-start; padding: 6px 8px; gap: 3px; }
+  /* Tabs — mobile shows only the flagship frameworks (Coaching + Together + Meet) */
+  nav#tabs { justify-content: center; padding: 6px 8px; gap: 6px; }
   nav#tabs button { font-size: 10px; padding: 5px 12px; }
+  nav#tabs button:not([data-framework="coaching"]):not([data-framework="together"]):not([data-framework="meet"]) {
+    display: none;
+  }
 
   /* ── Orb-first reshape: hide chrome, float minimal caption + start button ─── */
-  nav#tabs       { display: none !important; }
   #quick-cmds    { display: none; }
   #trust         { display: none; }
 

@@ -4,11 +4,15 @@ const SAMPLE_RATE = 24000;
 
 const WORKLET_CODE = `
 class PcmCapture extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
-    this._buf = new Int16Array(1200);
+    const opts = (options && options.processorOptions) || {};
+    const targetRate = opts.targetRate || 24000;
+    const bufSize = opts.bufSize || 1200;
+    this._buf = new Int16Array(bufSize);
+    this._bufSize = bufSize;
     this._len = 0;
-    this._ratio = sampleRate / ${SAMPLE_RATE};
+    this._ratio = sampleRate / targetRate;
     this._acc = 0;
   }
   process(inputs) {
@@ -20,7 +24,7 @@ class PcmCapture extends AudioWorkletProcessor {
         this._acc -= this._ratio;
         const s = Math.max(-1, Math.min(1, ch[i]));
         this._buf[this._len++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        if (this._len >= 1200) {
+        if (this._len >= this._bufSize) {
           this.port.postMessage(this._buf.buffer.slice(0, this._len * 2));
           this._len = 0;
         }
@@ -33,11 +37,13 @@ registerProcessor('pcm-capture', PcmCapture);
 `;
 
 export class MicCapture {
-  constructor(onChunk) {
-    this.onChunk = onChunk; // (ArrayBuffer) => void
+  constructor(onChunk24k, onChunk16k) {
+    this.onChunk24k = onChunk24k;         // (ArrayBuffer) => void — 24kHz PCM for Gemini
+    this.onChunk16k = onChunk16k || null; // (ArrayBuffer) => void — 16kHz PCM for Sortformer (optional)
     this._stream = null;
     this._ctx = null;
-    this._node = null;
+    this._node24 = null;
+    this._node16 = null;
   }
 
   async start() {
@@ -50,16 +56,28 @@ export class MicCapture {
     await this._ctx.audioWorklet.addModule(url);
     URL.revokeObjectURL(url);
     const src = this._ctx.createMediaStreamSource(this._stream);
-    this._node = new AudioWorkletNode(this._ctx, 'pcm-capture');
-    this._node.port.onmessage = (e) => this.onChunk(e.data);
-    src.connect(this._node);
+
+    this._node24 = new AudioWorkletNode(this._ctx, 'pcm-capture', {
+      processorOptions: { targetRate: 24000, bufSize: 720 }, // 30ms @ 24kHz — Gemini Live best-practice window
+    });
+    this._node24.port.onmessage = (e) => this.onChunk24k(e.data);
+    src.connect(this._node24);
+
+    if (this.onChunk16k) {
+      this._node16 = new AudioWorkletNode(this._ctx, 'pcm-capture', {
+        processorOptions: { targetRate: 16000, bufSize: 1600 },
+      });
+      this._node16.port.onmessage = (e) => this.onChunk16k(e.data);
+      src.connect(this._node16);
+    }
   }
 
   stop() {
-    this._node?.disconnect();
+    this._node24?.disconnect();
+    this._node16?.disconnect();
     this._ctx?.close();
     this._stream?.getTracks().forEach(t => t.stop());
-    this._node = null; this._ctx = null; this._stream = null;
+    this._node24 = null; this._node16 = null; this._ctx = null; this._stream = null;
   }
 }
 

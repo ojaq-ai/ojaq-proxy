@@ -5,6 +5,35 @@ function map(v, lo, hi, oLo, oHi) {
   return oLo + ((v - lo) / (hi - lo)) * (oHi - oLo);
 }
 
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// Hue lerp that always takes the shorter arc on the color wheel.
+function shortArcHueLerp(a, b, t) {
+  let diff = b - a;
+  if (diff > 180) diff -= 360;
+  else if (diff < -180) diff += 360;
+  return ((a + diff * t) % 360 + 360) % 360;
+}
+
+function hexToHsl(hex) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16) / 255;
+  const g = parseInt(h.substring(2, 4), 16) / 255;
+  const b = parseInt(h.substring(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let hue = 0, sat = 0;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r)      hue = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) hue = (b - r) / d + 2;
+    else                hue = (r - g) / d + 4;
+    hue *= 60;
+  }
+  return { hue, sat: sat * 100 };
+}
+
 const MODE_CONFIG = {
   hold:      { speedMul: 0.3, cohesionMul: 0.8, brightMul: 0.7 },
   reflect:   { speedMul: 1.0, cohesionMul: 1.0, brightMul: 1.0 },
@@ -50,12 +79,17 @@ class Orb {
     this._brightness = brightness;
     this._warmth = warmth;
     this._angularity = angularity;
+    this._speakerHue = params.speakerHue || 0;
+    this._speakerSat = params.speakerSat || 0;
+    this._speakerStrength = params.speakerStrength || 0;
   }
 
   draw(ctx, t) {
     const r = this._r * (1 + Math.sin(t * 2 + this.phase) * 0.15);
-    const hue = this._warmth * 40 + (1 - this._warmth) * 240;
-    const sat = 35 + this._warmth * 25;
+    const sentimentHue = this._warmth * 40 + (1 - this._warmth) * 240;
+    const sentimentSat = 35 + this._warmth * 25;
+    const hue = shortArcHueLerp(sentimentHue, this._speakerHue, this._speakerStrength);
+    const sat = lerp(sentimentSat, this._speakerSat, this._speakerStrength);
     const alpha = 0.2 + this._brightness * 0.5;  // always visible, brighter with engagement
 
     // Glow
@@ -98,6 +132,10 @@ export class Avatar {
     this.depth = 0;
     this.t = 0;
     this.orbs = [];
+    this.speakerHue = 0;
+    this.speakerSat = 0;
+    this.speakerStrength = 0;
+    this._colorTween = null;
     this._resize();
     window.addEventListener('resize', () => this._resize());
     this._animate();
@@ -123,6 +161,32 @@ export class Avatar {
   setPresence(p) { this.target = { ...p }; this._settling = false; }
   setMode(m) { this.mode = m; }
   setDepth(d) { this.depth = d; }
+
+  /** Tint the orb toward a speaker-specific color. hex=null clears the tint.
+   *  Sentiment stays the primary signal (strength maxes at 0.5). */
+  setSpeakerColor(hex, fadeMs = 700) {
+    const fromHue = this.speakerHue;
+    const fromSat = this.speakerSat;
+    const fromStrength = this.speakerStrength;
+    let toHue, toSat, toStrength;
+    if (hex == null) {
+      // Fade out — hold current hue/sat frozen, drop strength to 0 so no extra rotation during the fade
+      toHue = fromHue;
+      toSat = fromSat;
+      toStrength = 0;
+    } else {
+      const { hue, sat } = hexToHsl(hex);
+      toHue = hue;
+      toSat = sat;
+      toStrength = 0.5;
+    }
+    this._colorTween = {
+      fromHue, fromSat, fromStrength,
+      toHue, toSat, toStrength,
+      start: performance.now(),
+      duration: fadeMs,
+    };
+  }
 
   /** Slow-fade from current state toward a damped rest — keeps the
    *  emotional fingerprint of wherever the session ended, just softer. */
@@ -166,6 +230,17 @@ export class Avatar {
       }
     }
 
+    // Speaker color tween — independent of presence/settle animations
+    if (this._colorTween) {
+      const ct = this._colorTween;
+      const t = Math.min(1, (performance.now() - ct.start) / ct.duration);
+      const ease = 1 - Math.pow(1 - t, 3);
+      this.speakerHue      = shortArcHueLerp(ct.fromHue, ct.toHue, ease);
+      this.speakerSat      = lerp(ct.fromSat, ct.toSat, ease);
+      this.speakerStrength = lerp(ct.fromStrength, ct.toStrength, ease);
+      if (t >= 1) this._colorTween = null;
+    }
+
     const { energy, confidence, resistance, engagement, congruence, sentiment } = this.current;
     const mc = MODE_CONFIG[this.mode] || MODE_CONFIG.reflect;
 
@@ -177,6 +252,9 @@ export class Avatar {
       harmony:    map(congruence, 0, 100, 0.2, 1),
       warmth:     map(sentiment, -1, 1, 0, 1),
       depth:      this.depth,
+      speakerHue:      this.speakerHue,
+      speakerSat:      this.speakerSat,
+      speakerStrength: this.speakerStrength,
     };
 
     const cx = this.w / 2, cy = this.h / 2;

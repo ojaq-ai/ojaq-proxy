@@ -3,6 +3,7 @@
 import { FRAMEWORKS, assemblePrompt } from './frameworks.js';
 import { GeminiConnection } from './gemini.js';
 import { MicCapture, AudioPlayer, arrayBufToBase64 } from './audio.js';
+import { SortformerConnection } from './sortformer.js';
 import { Avatar } from './avatar.js';
 import { SessionConductor } from './conductor.js';
 import { mapEmotion, PresenceHistory } from './presence.js';
@@ -24,11 +25,19 @@ let currentFramework = FRAMEWORKS.coaching;
 let gemini = null;
 let mic = null;
 let player = null;
+let sortformer = null;
+let sortformerDropLogged = false;
+let sortformerReady = false;
+let lastEmittedSpeaker = null;
+let candidateSpeaker = null;
+let candidateFrames = 0;
+const SPEAKER_COLORS = ['#c9a0c9', '#a0c9c9', '#c9c9a0', '#c9b0a0'];
 let avatar = null;
 let conductor = null;
 let presenceHistory = new PresenceHistory(20);
 let running = false;
 let timerInterval = null;
+let startupTimer = null;
 let sessionId = null;
 let turnCount = 0;
 let wakeLock = null;
@@ -75,65 +84,65 @@ const langBase = userLanguage.split('-')[0];
 const presenceMode = new URLSearchParams(location.search).get('presence')
   || localStorage.getItem('ojaq_presence')
   || 'off';
+let speakersActive = (new URLSearchParams(location.search).get('speakers')
+  || localStorage.getItem('ojaq_speakers')
+  || '0') === '1';
 
-// ── i18n strings ────────────────────────────────────────────────────────
-const I18N = {
-  en: {
-    cta: 'Want to continue this?',
-    sub: "The mobile app is where Ojaq goes deeper. I'll email you when it's ready.",
-    fbPlaceholder: 'Anything you want me to know? (optional)',
-    success: "You're in. I'll find you when it's ready.",
-    thanks: 'Thank you.',
-    expTitle: "You've spent time with Ojaq today.",
-    expSub: "The mobile app is where it goes deeper. I'll find you when it's ready.",
-    minutes: (n) => `${n} minute${n > 1 ? 's' : ''}`,
-  },
-  tr: {
-    cta: 'Devam etmek ister misin?',
-    sub: "Mobil uygulama, Ojaq'in daha derine indigi yer. Hazir oldugunda sana yazarim.",
-    fbPlaceholder: 'Bana soylemek istedigin bir sey var mi? (istege bagli)',
-    success: 'Listeye girdin. Hazir oldugunda seni bulurum.',
-    thanks: 'Tesekkur ederim.',
-    expTitle: "Bugun Ojaq ile zaman gecirdin.",
-    expSub: "Mobil uygulama, Ojaq'in daha derine indigi yer. Hazir oldugunda seni bulurum.",
-    minutes: (n) => `${n} dakika`,
-  },
-  de: {
-    cta: 'Mochtest du das fortsetzen?',
-    sub: 'Die mobile App ist der Ort, an dem Ojaq tiefer geht. Ich schreibe dir, wenn sie bereit ist.',
-    fbPlaceholder: 'Mochtest du mir etwas mitteilen? (optional)',
-    success: 'Du bist dabei. Ich melde mich, wenn es soweit ist.',
-    thanks: 'Danke.',
-    expTitle: 'Du hast heute Zeit mit Ojaq verbracht.',
-    expSub: 'Die mobile App ist der Ort, an dem Ojaq tiefer geht. Ich finde dich, wenn sie bereit ist.',
-    minutes: (n) => `${n} Minute${n > 1 ? 'n' : ''}`,
-  },
-  es: {
-    cta: 'Quieres continuar esto?',
-    sub: 'La aplicacion movil es donde Ojaq va mas profundo. Te escribire cuando este lista.',
-    fbPlaceholder: 'Algo que quieras decirme? (opcional)',
-    success: 'Estas dentro. Te encontrare cuando este lista.',
-    thanks: 'Gracias.',
-    expTitle: 'Has pasado tiempo con Ojaq hoy.',
-    expSub: 'La aplicacion movil es donde va mas profundo. Te encontrare cuando este lista.',
-    minutes: (n) => `${n} minuto${n > 1 ? 's' : ''}`,
-  },
-  fr: {
-    cta: 'Veux-tu continuer?',
-    sub: "L'application mobile, c'est la ou Ojaq va plus loin. Je t'ecrirai quand elle sera prete.",
-    fbPlaceholder: 'Quelque chose a me dire? (facultatif)',
-    success: "Tu es sur la liste. Je te retrouverai quand ce sera pret.",
-    thanks: 'Merci.',
-    expTitle: "Tu as passe du temps avec Ojaq aujourd'hui.",
-    expSub: "L'application mobile, c'est la ou ca va plus loin. Je te retrouverai quand ce sera pret.",
-    minutes: (n) => `${n} minute${n > 1 ? 's' : ''}`,
-  },
-};
-
-const t = I18N[langBase] || I18N.en;
+const frameworkParam = new URLSearchParams(location.search).get('framework')
+  || localStorage.getItem('ojaq_framework');
+if (frameworkParam && FRAMEWORKS[frameworkParam]) {
+  currentFramework = FRAMEWORKS[frameworkParam];
+}
+// Two-person frameworks imply Sortformer — auto-activate even if URL omits ?speakers=1
+const SPEAKER_FRAMEWORKS = new Set(['together', 'meet']);
+if (SPEAKER_FRAMEWORKS.has(currentFramework.id)) speakersActive = true;
 
 // ── avatar init ─────────────────────────────────────────────────────────
 avatar = new Avatar(document.getElementById('avatar-canvas'));
+
+// ── sortformer pre-warm / teardown helpers ──────────────────────────────
+function prewarmSortformer() {
+  if (sortformer) return;
+  sortformer = new SortformerConnection();
+  sortformer.onOpen = () => {
+    sortformerReady = true;
+    log('[sortformer] warmed');
+    if (!running) updateStartButton();
+  };
+  sortformer.connect();
+  log('[sortformer] pre-warming…');
+  updateStartButton();
+}
+
+function teardownSortformer() {
+  sortformer?.close(); sortformer = null;
+  sortformerReady = false;
+  avatar?.setSpeakerColor(null);
+  lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
+  if (!running) updateStartButton();
+}
+
+// Reflect pre-warm state on the pre-session button. No-op while a session is active.
+function updateStartButton() {
+  if (running) return;
+  if (speakersActive && sortformer && !sortformerReady) {
+    $btn.disabled = true;
+    $btnText.textContent = 'Preparing...';
+  } else {
+    $btn.disabled = false;
+    $btnText.textContent = 'Start Session';
+  }
+}
+
+function syncUrl() {
+  const params = new URLSearchParams(location.search);
+  if (currentFramework.id !== 'coaching') params.set('framework', currentFramework.id);
+  else params.delete('framework');
+  if (speakersActive) params.set('speakers', '1');
+  else params.delete('speakers');
+  const qs = params.toString();
+  history.replaceState(null, '', `${location.pathname}${qs ? '?' + qs : ''}${location.hash}`);
+}
 
 // ── framework tabs ──────────────────────────────────────────────────────
 function renderTabs() {
@@ -141,17 +150,32 @@ function renderTabs() {
   for (const fw of Object.values(FRAMEWORKS)) {
     const btn = document.createElement('button');
     btn.textContent = fw.name;
+    btn.dataset.framework = fw.id;
     btn.className = fw.id === currentFramework.id ? 'active' : '';
     btn.style.borderColor = fw.id === currentFramework.id ? fw.color : '';
     btn.addEventListener('click', () => {
+      if (fw.id === currentFramework.id) return;
       if (running) stop();
+      const wasSpeakerFw = SPEAKER_FRAMEWORKS.has(currentFramework.id);
+      const isSpeakerFw = SPEAKER_FRAMEWORKS.has(fw.id);
       currentFramework = fw;
+      if (isSpeakerFw) {
+        speakersActive = true;
+        prewarmSortformer(); // no-op if already open — keeps WS warm across together↔meet switch
+      } else if (wasSpeakerFw) {
+        speakersActive = false;
+        teardownSortformer();
+      }
+      syncUrl();
       renderTabs();
     });
     $tabs.appendChild(btn);
   }
 }
 renderTabs();
+
+// Pre-warm on URL-direct load to a two-person framework (or explicit ?speakers=1) — cold-start overlaps with page read
+if (speakersActive) prewarmSortformer();
 
 // ── sparklines ──────────────────────────────────────────────────────────
 // Dimension-specific colors
@@ -329,7 +353,48 @@ async function start() {
     // audio
     player = new AudioPlayer();
     player.init();
-    mic = new MicCapture((buf) => gemini.sendAudio(arrayBufToBase64(buf)));
+
+    // Optional: Sortformer diarization tap — non-blocking, fire-and-forget connect.
+    // 16kHz PCM chunks are dropped silently until the WS opens.
+    let onChunk16k = null;
+    if (speakersActive) {
+      sortformerDropLogged = false;
+      if (!sortformer) sortformer = new SortformerConnection();
+      sortformer.onOpen = () => { sortformerReady = true; log('[sortformer] connected'); };
+      sortformer.onProbs = (probs) => {
+        log(`[sortformer] probs=[${probs.map(p => p.toFixed(3)).join(', ')}]`);
+        // Debounced argmax → [CMD:speaker:N] on confident change
+        let maxIdx = 0, maxVal = probs[0] ?? 0;
+        for (let i = 1; i < probs.length; i++) {
+          if (probs[i] > maxVal) { maxVal = probs[i]; maxIdx = i; }
+        }
+        if (maxVal < 0.5) return;
+        if (maxIdx === candidateSpeaker) {
+          candidateFrames++;
+        } else {
+          candidateSpeaker = maxIdx;
+          candidateFrames = 1;
+        }
+        if (candidateFrames >= 3 && candidateSpeaker !== lastEmittedSpeaker) {
+          sendCmd(`[CMD:speaker:${candidateSpeaker}]`);
+          avatar.setSpeakerColor(SPEAKER_COLORS[candidateSpeaker]);
+          log(`[sortformer] speaker change -> ${candidateSpeaker}`);
+          lastEmittedSpeaker = candidateSpeaker;
+        }
+      };
+      sortformer.onClose = (code, reason) => log(`[sortformer] closed ${code} ${reason || ''}`);
+      sortformer.onError = (err) => log(`[sortformer] error: ${err?.message || err}`);
+      sortformer.connect();
+      onChunk16k = (buf) => {
+        if (!sortformer?.isOpen) {
+          if (!sortformerDropLogged) { log('[sortformer] dropping pcm — ws not open yet'); sortformerDropLogged = true; }
+          return;
+        }
+        sortformer.sendPcm(buf);
+      };
+    }
+
+    mic = new MicCapture((buf) => gemini.sendAudio(arrayBufToBase64(buf)), onChunk16k);
     await mic.start();
     log('mic active');
 
@@ -360,9 +425,10 @@ async function start() {
     timerInterval = setInterval(updateTimer, 1000);
 
     // opening greeting — small delay to ensure WS is fully ready
-    setTimeout(() => {
+    startupTimer = setTimeout(() => {
       sendCmd(`[CMD:lang:${langBase}]`);
       sendCmd('[CMD:start]');
+      startupTimer = null;
     }, 300);
 
   } catch (err) {
@@ -374,6 +440,13 @@ async function start() {
 }
 
 function stop() {
+  // Reset session-lifecycle flags FIRST — if stop() was called mid-speech,
+  // a stale modelSpeaking=true would cause next session's [CMD:start] to
+  // be silently queued instead of sent.
+  modelSpeaking = false;
+  cmdQueue = [];
+  if (startupTimer) { clearTimeout(startupTimer); startupTimer = null; }
+
   wakeLock?.release();
   wakeLock = null;
   const lastSignal = $signal.textContent || '';
@@ -402,6 +475,7 @@ function stop() {
   mic?.stop(); mic = null;
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
+  teardownSortformer();
   conductor = null;
   clearInterval(timerInterval);
 
@@ -427,24 +501,19 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
   const $dur = document.getElementById('reflect-duration');
   const $sig = document.getElementById('reflect-signal');
   const $email = document.getElementById('reflect-email');
+  const $emailSubmit = document.getElementById('reflect-email-submit');
   const $note = document.getElementById('reflect-wl-note');
   const $fb = document.getElementById('reflect-fb');
+  const $fbSubmit = document.getElementById('reflect-fb-submit');
 
   // Duration: skip under 60s
   const mins = Math.floor(durationMs / 60000);
   if (mins >= 1) {
-    $dur.textContent = t.minutes(mins);
+    $dur.textContent = `${mins} minute${mins > 1 ? 's' : ''}`;
     $dur.style.display = '';
   } else {
     $dur.style.display = 'none';
   }
-
-  // Set i18n copy
-  const cta = $ref.querySelector('.reflect-cta');
-  const sub = $ref.querySelector('.reflect-sub');
-  if (cta) cta.textContent = t.cta;
-  if (sub) sub.textContent = t.sub;
-  $fb.placeholder = t.fbPlaceholder;
 
   // Signal: skip if empty
   if (lastSignal.trim()) {
@@ -454,8 +523,18 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
     $sig.style.display = 'none';
   }
 
-  // Reset fields
+  // Restore waitlist copy (showExperiencedState may have overwritten it in a prior render)
+  const wl = document.getElementById('reflect-waitlist');
+  const wlCta = wl.querySelector('.reflect-cta');
+  const wlSub = wl.querySelector('.reflect-sub');
+  if (wlCta) wlCta.textContent = 'Want to continue this?';
+  if (wlSub) wlSub.textContent = "The mobile app is where Ojaq goes deeper. I'll email you when it's ready.";
+
+  // Reset fields + re-show inputs/buttons in case a prior session hid them on success
   $email.value = '';
+  $email.style.display = '';
+  $emailSubmit.style.display = '';
+  $emailSubmit.disabled = false;
   $note.textContent = '';
   $fb.value = '';
   $ref.style.display = 'flex';
@@ -466,10 +545,8 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
   document.getElementById('tabs').style.display = 'none';
   document.getElementById('overlay').style.display = 'none';
 
-  // Waitlist email — submit on Enter
-  $email.onkeydown = async (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
+  // Waitlist email — submit on Enter or button click
+  const submitEmail = async () => {
     const email = $email.value.trim();
     if (!email) return;
 
@@ -479,6 +556,7 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
       return;
     }
 
+    $emailSubmit.disabled = true;
     try {
       const r = await fetch('/waitlist', {
         method: 'POST',
@@ -490,20 +568,27 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
         sent.push(email.toLowerCase());
         localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
         $email.style.display = 'none';
-        $note.textContent = t.success;
+        $emailSubmit.style.display = 'none';
+        $note.textContent = "You're in. I'll find you when it's ready.";
         // Log action
         fetch('/session/action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: endSessionId, action: 'waitlist' }),
         }).catch(() => {});
+      } else {
+        $emailSubmit.disabled = false;
       }
     } catch {
       $note.textContent = 'Something went wrong. Try again.';
+      $emailSubmit.disabled = false;
     }
   };
 
-  // Feedback — submit on Enter or blur if has content
+  $email.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitEmail(); } };
+  $emailSubmit.onclick = submitEmail;
+
+  // Feedback — submit on Enter, blur, or button click
   const submitFeedback = async () => {
     const text = $fb.value.trim();
     if (!text) return;
@@ -518,8 +603,8 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
         }),
       });
       $fb.value = '';
-      $fb.placeholder = t.thanks;
-      setTimeout(() => { $fb.placeholder = t.fbPlaceholder; }, 4000);
+      $fb.placeholder = 'Thank you.';
+      setTimeout(() => { $fb.placeholder = 'What sticks with you?'; }, 4000);
       // Log action
       fetch('/session/action', {
         method: 'POST',
@@ -531,6 +616,17 @@ function showReflection(durationMs, lastSignal, frameworkId, endSessionId) {
 
   $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFeedback(); } };
   $fb.onblur = () => submitFeedback();
+  $fbSubmit.onclick = submitFeedback;
+
+  // "Another session" — dismiss the overlay, restore playground chrome
+  const $another = document.getElementById('reflect-another');
+  $another.style.display = '';
+  $another.onclick = () => {
+    $ref.style.display = 'none';
+    showNormalUI();
+    document.getElementById('overlay').style.display = '';
+    $signal.textContent = ''; // clear stale signal from prior session
+  };
 }
 
 function setControlsEnabled(on) {
@@ -563,28 +659,30 @@ function showExperiencedState() {
   const $dur = document.getElementById('reflect-duration');
   const $sig = document.getElementById('reflect-signal');
   const $email = document.getElementById('reflect-email');
+  const $emailSubmit = document.getElementById('reflect-email-submit');
   const $note = document.getElementById('reflect-wl-note');
   const $fb = document.getElementById('reflect-fb');
+  const $fbSubmit = document.getElementById('reflect-fb-submit');
 
   $dur.style.display = 'none';
   $sig.style.display = 'none';
 
-  // Override waitlist copy
-  const cta = $ref.querySelector('.reflect-cta');
-  const sub = $ref.querySelector('.reflect-sub');
-  if (cta) cta.textContent = t.expTitle;
-  if (sub) sub.textContent = t.expSub;
+  // Override waitlist block copy for the rate-limited state
+  const wl = document.getElementById('reflect-waitlist');
+  const cta = wl.querySelector('.reflect-cta');
+  const sub = wl.querySelector('.reflect-sub');
+  if (cta) cta.textContent = "You've spent time with Ojaq today.";
+  if (sub) sub.textContent = "The mobile app is where it goes deeper. I'll find you when it's ready.";
 
   $email.value = '';
+  $email.style.display = '';
+  $emailSubmit.style.display = '';
+  $emailSubmit.disabled = false;
   $note.textContent = '';
   $fb.value = '';
-  $fb.placeholder = t.fbPlaceholder;
   $ref.style.display = 'flex';
 
-  // Email — submit on Enter
-  $email.onkeydown = async (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
+  const submitEmail = async () => {
     const email = $email.value.trim();
     if (!email) return;
 
@@ -594,6 +692,7 @@ function showExperiencedState() {
       return;
     }
 
+    $emailSubmit.disabled = true;
     try {
       const r = await fetch('/waitlist', {
         method: 'POST',
@@ -605,14 +704,19 @@ function showExperiencedState() {
         sent.push(email.toLowerCase());
         localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
         $email.style.display = 'none';
-        $note.textContent = t.success;
+        $emailSubmit.style.display = 'none';
+        $note.textContent = "You're in. I'll find you when it's ready.";
+      } else {
+        $emailSubmit.disabled = false;
       }
     } catch {
       $note.textContent = 'Something went wrong. Try again.';
+      $emailSubmit.disabled = false;
     }
   };
+  $email.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitEmail(); } };
+  $emailSubmit.onclick = submitEmail;
 
-  // Feedback
   const submitFb = async () => {
     const text = $fb.value.trim();
     if (!text) return;
@@ -623,12 +727,16 @@ function showExperiencedState() {
         body: JSON.stringify({ text, duration_s: 0, framework: 'rate_limit' }),
       });
       $fb.value = '';
-      $fb.placeholder = t.thanks;
-      setTimeout(() => { $fb.placeholder = t.fbPlaceholder; }, 4000);
+      $fb.placeholder = 'Thank you.';
+      setTimeout(() => { $fb.placeholder = 'What sticks with you?'; }, 4000);
     } catch {}
   };
   $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFb(); } };
   $fb.onblur = () => submitFb();
+  $fbSubmit.onclick = submitFb;
+
+  // Hide "Another session" — user is rate-limited, starting another would just fail
+  document.getElementById('reflect-another').style.display = 'none';
 }
 
 // ── page load: check rate limit status before showing UI ────────────────
