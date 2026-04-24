@@ -37,6 +37,7 @@ let conductor = null;
 let presenceHistory = new PresenceHistory(20);
 let running = false;
 let timerInterval = null;
+let startupTimer = null;
 let sessionId = null;
 let turnCount = 0;
 let wakeLock = null;
@@ -424,9 +425,10 @@ async function start() {
     timerInterval = setInterval(updateTimer, 1000);
 
     // opening greeting — small delay to ensure WS is fully ready
-    setTimeout(() => {
+    startupTimer = setTimeout(() => {
       sendCmd(`[CMD:lang:${langBase}]`);
       sendCmd('[CMD:start]');
+      startupTimer = null;
     }, 300);
 
   } catch (err) {
@@ -438,6 +440,13 @@ async function start() {
 }
 
 function stop() {
+  // Reset session-lifecycle flags FIRST — if stop() was called mid-speech,
+  // a stale modelSpeaking=true would cause next session's [CMD:start] to
+  // be silently queued instead of sent.
+  modelSpeaking = false;
+  cmdQueue = [];
+  if (startupTimer) { clearTimeout(startupTimer); startupTimer = null; }
+
   wakeLock?.release();
   wakeLock = null;
   const lastSignal = $signal.textContent || '';
