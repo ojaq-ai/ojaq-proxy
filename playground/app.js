@@ -381,7 +381,7 @@ async function start() {
         for (let i = 1; i < probs.length; i++) {
           if (probs[i] > maxVal) { maxVal = probs[i]; maxIdx = i; }
         }
-        if (maxVal < 0.5) return;
+        if (maxVal < 0.65) return;
         if (maxIdx === candidateSpeaker) {
           candidateFrames++;
         } else {
