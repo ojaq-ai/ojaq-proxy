@@ -339,9 +339,11 @@ async function start() {
         analyzePresence(lastUserText, lastModelText);
       }
       // Re-assert current dominant speaker so Gemini's context doesn't drift
-      // during long replies when no speaker change occurred
-      if (lastEmittedSpeaker !== null) {
+      // during long replies. GATED on lastUserText so spurious turnCompletes
+      // during silence (VAD flicker on ambient noise) don't re-emit speaker events.
+      if (lastUserText && lastEmittedSpeaker !== null) {
         sendCmd(`[CMD:speaker:${lastEmittedSpeaker}]`);
+        log(`[speaker] turn-reassertion -> ${lastEmittedSpeaker}`);
       }
       // Reset for next turn
       lastUserText = '';
@@ -391,11 +393,20 @@ async function start() {
         if (candidateFrames >= 3 && candidateSpeaker !== lastEmittedSpeaker) {
           sendCmd(`[CMD:speaker:${candidateSpeaker}]`);
           avatar.setSpeakerColor(SPEAKER_COLORS[candidateSpeaker]);
-          log(`[sortformer] speaker change -> ${candidateSpeaker}`);
+          log(`[speaker] sortformer-change -> ${candidateSpeaker}`);
           lastEmittedSpeaker = candidateSpeaker;
         }
       };
-      sortformer.onClose = (code, reason) => log(`[sortformer] closed ${code} ${reason || ''}`);
+      sortformer.onClose = (code, reason) => {
+        log(`[sortformer] closed ${code} ${reason || ''}`);
+        // Clear speaker state — a stale lastEmittedSpeaker after WS drop would cause
+        // per-turn re-assertions to fire [CMD:speaker:N] for a speaker no longer tracked.
+        sortformerReady = false;
+        lastEmittedSpeaker = null;
+        candidateSpeaker = null;
+        candidateFrames = 0;
+        avatar?.setSpeakerColor(null);
+      };
       sortformer.onError = (err) => log(`[sortformer] error: ${err?.message || err}`);
       sortformer.connect();
       onChunk16k = (buf) => {
