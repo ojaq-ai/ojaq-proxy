@@ -31,6 +31,7 @@ let sortformerReady = false;
 let lastEmittedSpeaker = null;
 let candidateSpeaker = null;
 let candidateFrames = 0;
+let lastSortformerSpeechMs = 0; // timestamp of last non-trivial Sortformer activity (max prob >= 0.3)
 const SPEAKER_COLORS = ['#c9a0c9', '#a0c9c9', '#c9c9a0', '#c9b0a0'];
 let avatar = null;
 let conductor = null;
@@ -119,6 +120,7 @@ function teardownSortformer() {
   sortformerReady = false;
   avatar?.setSpeakerColor(null);
   lastEmittedSpeaker = null; candidateSpeaker = null; candidateFrames = 0;
+  lastSortformerSpeechMs = 0;
   if (!running) updateStartButton();
 }
 
@@ -228,11 +230,19 @@ function sendCmd(text) {
 
 function flushCmdQueue() {
   if (!gemini || cmdQueue.length === 0) return;
-  // Only send the last command of each type — skip stale ones
-  const last = cmdQueue[cmdQueue.length - 1];
+  // Dedupe by verb type — keep most recent of each.
+  // Verbs: speaker, speakers, phase, focus, lang, start, ...
+  const byVerb = new Map();
+  for (const cmd of cmdQueue) {
+    const match = cmd.match(/^\[CMD:([^:\]]+)/);
+    const verb = match ? match[1] : cmd;
+    byVerb.set(verb, cmd); // Map preserves insertion order; overwrite keeps latest
+  }
   cmdQueue = [];
-  gemini.sendText(last);
-  log(`-> ${last}`);
+  for (const cmd of byVerb.values()) {
+    gemini.sendText(cmd);
+    log(`-> ${cmd}`);
+  }
 }
 
 // ── async presence analysis — runs parallel, never blocks voice ──────────
@@ -330,6 +340,17 @@ async function start() {
       if (lastUserText) {
         analyzePresence(lastUserText, lastModelText);
       }
+      // Re-assert current dominant speaker so Gemini's context doesn't drift
+      // during long replies. THREE gates:
+      //   1) lastUserText — rules out spurious turnCompletes with empty transcripts.
+      //   2) lastEmittedSpeaker — skip until Sortformer has confirmed at least one speaker.
+      //   3) Sortformer activity within last 3s — rules out cases where Gemini's ASR
+      //      transcribes ambient noise as a short string (non-empty text but no real speech).
+      const recentSpeech = Date.now() - lastSortformerSpeechMs < 3000;
+      if (lastUserText && lastEmittedSpeaker !== null && recentSpeech) {
+        sendCmd(`[CMD:speaker:${lastEmittedSpeaker}]`);
+        log(`[speaker] turn-reassertion -> ${lastEmittedSpeaker}`);
+      }
       // Reset for next turn
       lastUserText = '';
       lastModelText = '';
@@ -368,7 +389,10 @@ async function start() {
         for (let i = 1; i < probs.length; i++) {
           if (probs[i] > maxVal) { maxVal = probs[i]; maxIdx = i; }
         }
-        if (maxVal < 0.5) return;
+        // Track any non-trivial speech activity (below the 0.65 confident-change threshold but above true silence)
+        // so the onTurnComplete re-assertion gate can tell if someone's actually been speaking recently.
+        if (maxVal >= 0.3) lastSortformerSpeechMs = Date.now();
+        if (maxVal < 0.65) return;
         if (maxIdx === candidateSpeaker) {
           candidateFrames++;
         } else {
@@ -378,11 +402,21 @@ async function start() {
         if (candidateFrames >= 3 && candidateSpeaker !== lastEmittedSpeaker) {
           sendCmd(`[CMD:speaker:${candidateSpeaker}]`);
           avatar.setSpeakerColor(SPEAKER_COLORS[candidateSpeaker]);
-          log(`[sortformer] speaker change -> ${candidateSpeaker}`);
+          log(`[speaker] sortformer-change -> ${candidateSpeaker}`);
           lastEmittedSpeaker = candidateSpeaker;
         }
       };
-      sortformer.onClose = (code, reason) => log(`[sortformer] closed ${code} ${reason || ''}`);
+      sortformer.onClose = (code, reason) => {
+        log(`[sortformer] closed ${code} ${reason || ''}`);
+        // Clear speaker state — a stale lastEmittedSpeaker after WS drop would cause
+        // per-turn re-assertions to fire [CMD:speaker:N] for a speaker no longer tracked.
+        sortformerReady = false;
+        lastEmittedSpeaker = null;
+        candidateSpeaker = null;
+        candidateFrames = 0;
+        lastSortformerSpeechMs = 0;
+        avatar?.setSpeakerColor(null);
+      };
       sortformer.onError = (err) => log(`[sortformer] error: ${err?.message || err}`);
       sortformer.connect();
       onChunk16k = (buf) => {
