@@ -211,15 +211,6 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       if (u) analyzePresence(u, m);
       lastUserText = '';
       lastModelText = '';
-      // Voice character: request a turn-level prosody summary ONLY if
-      // the user actually spoke this turn. turnComplete also fires after
-      // our [PROSODY_REPORT] inject (Gemini treats the inject as another
-      // user input and replies/acks); on those rounds `u` is empty
-      // because sendText never produces a transcript. Gating on `u`
-      // suppresses the spurious second summary request per round.
-      if (framework.id === 'voice' && u) {
-        emotion?.requestSummary();
-      }
     };
     gemini.onClose = (code, reason) => {
       log(`ws closed ${code} ${reason || ''}`);
@@ -246,22 +237,15 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       const raw = data.raw_emotion ? ` <- ${data.raw_emotion}` : '';
       log(`emotion: ${data.emotion} (${data.intensity.toFixed(2)})${raw}`);
     };
-    // Voice character only — receives turn-level prosody summaries and
-    // injects them into Gemini's next turn so the AI can coach on HOW
-    // the user spoke, not just WHAT they said. No-op for other chars.
-    emotion.onSummary = (summary) => {
-      if (framework.id !== 'voice' || !gemini) return;
-      // Empty summaries (very short utterance below the 3s window or
-      // a bookkeeping race) silently skip — the next user turn will
-      // produce reads and we'll inject then.
-      if (summary.empty || (summary.n_reads || 0) === 0) return;
-      const top = (summary.top || []).map(t => `${t.emotion}(${t.score})`).join(' ');
-      const inject =
-        `[PROSODY_REPORT: confidence_index=${summary.confidence_index} ` +
-        `dominant=${summary.dominant} top=${top} n_reads=${summary.n_reads}]`;
-      gemini.sendText(inject);
-      log(`-> ${inject}`);
-    };
+    // Note: emotion.onSummary intentionally not wired here. The summary
+    // endpoint is kept on the server (src/emotion_proxy.py) for future
+    // end-of-session reflection screen analytics — that path doesn't
+    // inject text into the model, so it doesn't run into the
+    // Gemini-Live "every text input triggers a response" issue. Live
+    // prosody coaching during the Voice character relies on the model's
+    // own audio listening; injecting structured text reports forces
+    // spurious model responses that no amount of prompt hardening
+    // suppresses (the API responds-to-every-text by design).
     emotion.onError = (err) => log(`emotion ws error: ${err?.message || err}`);
     emotion.connect();
 
