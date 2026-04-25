@@ -28,6 +28,42 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── header (simple top, non-sticky) ── */
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  position: relative;
+  z-index: 2;
+}
+
+.site-logo {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.site-signin {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.site-signin:hover { color: var(--text); }
+
+@media (max-width: 600px) {
+  .site-header { padding: 20px 20px; }
+  .site-logo { letter-spacing: 4px; }
+}
+
 /* ── hero ── */
 .hero {
   min-height: 100vh;
@@ -51,15 +87,6 @@ canvas#orbs {
   text-align: center;
   max-width: 640px;
   padding: 0 24px;
-}
-
-.logo {
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 6px;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 48px;
 }
 
 h1 {
@@ -381,11 +408,16 @@ footer {
 </head>
 <body>
 
+<!-- ── header (non-sticky, scrolls away) ── -->
+<header class="site-header">
+  <a href="/" class="site-logo">Ojaq</a>
+  <a href="/playground" class="site-signin">Sign in</a>
+</header>
+
 <!-- ── hero ── -->
 <div class="hero">
   <canvas id="orbs"></canvas>
   <div class="hero-content">
-    <div class="logo">Ojaq</div>
     <h1>An intelligence that listens <em>beneath</em> your words.</h1>
     <p class="subtitle">A voice-first space. Where your analytical mind and your intuition can finally meet.</p>
     <a href="/playground" class="cta">Try Ojaq</a>
