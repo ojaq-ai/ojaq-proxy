@@ -5,6 +5,8 @@ import { Avatar } from '/playground/avatar.js';
 import { GeminiConnection } from '/playground/gemini.js';
 import { MicCapture, AudioPlayer, arrayBufToBase64 } from '/playground/audio.js';
 import { FRAMEWORKS, assemblePrompt } from '/playground/frameworks.js';
+import { SessionConductor } from '/playground/conductor.js';
+import { PresenceHistory } from '/playground/presence.js';
 import * as billing from '/playground/billing.js';
 
 const log = (msg) => console.log(`[preview] ${msg}`);
@@ -30,6 +32,10 @@ let mic = null;
 let player = null;
 let reflectionRevealTimer = null;
 let _historyPushed = false;
+let conductor = null;
+let presenceHistory = null;
+let lastUserText = '';
+let lastModelText = '';
 
 const IDLE_PRESENCE = { energy: 30, confidence: 50, resistance: 5, engagement: 40, congruence: 60, sentiment: 0.1 };
 
@@ -58,16 +64,44 @@ async function activate() {
   log('session activating…');
 
   try {
+    // Reset per-session presence pipeline
+    presenceHistory = new PresenceHistory(20);
+    const framework = FRAMEWORKS.coaching;
+    conductor = new SessionConductor(framework);
+    conductor.onChange(({ phase, mode, depth }) => {
+      avatar.setMode(mode);
+      avatar.setDepth(depth);
+    });
+
+    lastUserText = '';
+    lastModelText = '';
+    $tUser.textContent = '';
+    $tModel.textContent = '';
+
     gemini = new GeminiConnection();
     gemini.onAudio = (b64) => player?.play(b64);
-    gemini.onInputTranscript = (t) => log(`user: ${t}`);
-    gemini.onOutputTranscript = (t) => log(`ojaq: ${t}`);
+    gemini.onInputTranscript = (t) => {
+      lastUserText += t;
+      $tUser.textContent = lastUserText;
+    };
+    gemini.onOutputTranscript = (t) => {
+      lastModelText += t;
+      // Strip any leaked [CMD:*] markers before display and before /analyze sees them
+      lastModelText = lastModelText.replace(/\[CMD:[^\]]*\]/g, '').trim();
+      $tModel.textContent = lastModelText;
+    };
+    gemini.onTurnComplete = () => {
+      // Async presence — never blocks the audio path
+      const u = lastUserText, m = lastModelText;
+      if (u) analyzePresence(u, m);
+      lastUserText = '';
+      lastModelText = '';
+    };
     gemini.onClose = (code, reason) => {
       log(`ws closed ${code} ${reason || ''}`);
       if (state === 'active') endSession();
     };
 
-    const framework = FRAMEWORKS.coaching;
     const prompt = assemblePrompt(framework);
     await gemini.connect(prompt, [], 'en-US');
     log('gemini connected');
@@ -96,6 +130,33 @@ function teardownVoice() {
   mic?.stop(); mic = null;
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
+  conductor = null;
+  presenceHistory = null;
+}
+
+// Async presence analysis — runs parallel to the voice loop. Never awaited
+// from anything on the audio path, so a slow /analyze never adds latency.
+// Mirrors the production pipeline in /playground/app.js.
+async function analyzePresence(userText, modelText) {
+  try {
+    const r = await fetch('/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: userText, model: modelText }),
+    });
+    if (!r.ok) return;
+    const p = await r.json();
+    if (!p || p.error) return;
+    presenceHistory?.push(p);
+    avatar.setPresence(p);
+    // Conductor reads the new presence and may decide to shift mode/depth.
+    // We don't surface its [CMD:*] outputs here — /preview keeps the model
+    // run uninterrupted; only the orb reflects the read.
+    conductor?.onPresence(p, () => {});
+    log(`presence e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
+  } catch {
+    // Silent — never let presence interrupt anything
+  }
 }
 
 function endSession() {
@@ -167,12 +228,16 @@ const $reflectForm = document.getElementById('reflect-form');
 const $reflectEmail = document.getElementById('reflect-email');
 const $reflectSubmit = document.querySelector('.reflect-submit');
 const $reflectTertiary = document.getElementById('reflect-tertiary');
+const $reflectHome = document.getElementById('reflect-home');
+const $tUser = document.getElementById('t-user');
+const $tModel = document.getElementById('t-model');
 
 // ── Wiring ───────────────────────────────────────────────────────────────
 document.getElementById('begin-btn').addEventListener('click', activate);
 document.getElementById('end-session').addEventListener('click', endSession);
 $reflectForm.addEventListener('submit', onReflectionSubmit);
 $reflectTertiary.addEventListener('click', activate);  // Start another → directly into a new session
+$reflectHome.addEventListener('click', dismissReflection);  // Back to home → idle landing
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state === 'reflecting') dismissReflection();
 });

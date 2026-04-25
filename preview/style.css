@@ -3,9 +3,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg: #07070b;
-  --text: #f0f0f5;
-  --muted: #5a5a70;
+  /* Aligned with production landing (/landing/index.html) */
+  --bg: #08080c;
+  --text: #e8e8f0;
+  --muted: #666680;
   --line: #1a1a24;
   --accent: #b8a0ff;
 }
@@ -22,20 +23,20 @@ body {
   font-feature-settings: "ss01", "cv11";
 }
 
-/* ── nav ─────────────────────────────────────────────────────────────── */
+/* ── nav (matches production landing dims) ──────────────────────────── */
 .nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 32px 40px;
+  padding: 24px 32px;
   position: relative;
   z-index: 10;
 }
 
 .nav .brand {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: 4px;
+  letter-spacing: 6px;
   text-transform: uppercase;
   text-decoration: none;
   color: var(--muted);
@@ -47,20 +48,21 @@ body {
 /* ── hero ────────────────────────────────────────────────────────────── */
 .hero {
   position: relative;
-  min-height: calc(100vh - 100px);
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 24px 80px;
+  padding: 0 24px;
   text-align: center;
-  overflow: hidden;
 }
 
-/* Orb sits behind the text as an atmospheric backdrop on landing.
-   In session-active/reflecting, blur lifts and orb sharpens. */
+/* Orb is fixed to the viewport (not the hero) so it's truly centered on the
+   page regardless of nav height, and stays as atmospheric backdrop while
+   the user scrolls through editorial. In session-active/reflecting, blur +
+   dim lift and orb sharpens — without ever moving. */
 .orb-backdrop {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -85,15 +87,15 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  max-width: 640px;
 }
 
 .hero-title {
-  font-size: clamp(36px, 6vw, 72px);
+  font-size: clamp(32px, 6vw, 56px);
   font-weight: 300;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  max-width: 760px;
-  margin-bottom: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+  margin-bottom: 24px;
 }
 
 .hero-title em {
@@ -102,40 +104,37 @@ body {
 }
 
 .hero-sub {
-  font-size: clamp(15px, 1.5vw, 18px);
+  font-size: clamp(16px, 2.5vw, 20px);
   font-weight: 300;
   color: var(--muted);
-  max-width: 520px;
   line-height: 1.6;
-  margin-bottom: 56px;
+  margin-bottom: 48px;
 }
 
-/* Primary CTA. Replaces the old "tap the orb" hint — discoverable, accessible,
-   analytics-trackable. The orb is still alive as backdrop. */
+/* Primary CTA — matches the .cta button style on production landing.
+   Solid pill, immediate (no fade delay) so users can act the moment the
+   page paints. */
 .begin-btn {
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
-  letter-spacing: 2.5px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  padding: 14px 36px;
-  border-radius: 40px;
-  border: 1px solid rgba(184, 160, 255, 0.45);
-  background: rgba(184, 160, 255, 0.06);
-  color: var(--text);
+  padding: 16px 48px;
+  border: none;
+  border-radius: 60px;
+  background: var(--text);
+  color: var(--bg);
   cursor: pointer;
-  transition: background 220ms ease, border-color 220ms ease, transform 220ms ease;
-  opacity: 0;
-  animation: beginFadeIn 800ms ease 2200ms forwards;
+  text-decoration: none;
+  transition: all 0.3s ease;
 }
 
 .begin-btn:hover {
-  background: rgba(184, 160, 255, 0.15);
-  border-color: var(--accent);
-  transform: translateY(-1px);
+  background: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(184, 160, 255, 0.2);
 }
-
-@keyframes beginFadeIn { to { opacity: 1; } }
 
 /* ── End session button (only visible while session active) ───────────── */
 .end-btn {
@@ -167,17 +166,12 @@ body {
 /* ── Session state machine ───────────────────────────────────────────────
    Three states on <body>: (none) idle, .session-active, .session-reflecting.
 
-   Active/reflecting: scroll locked, all surrounding chrome (nav, hero copy +
-   button, editorial, footer, account chip) fades out via opacity+visibility,
-   leaving only the orb + the appropriate session control. Visibility delay
-   on hide preserves layout during the fade; on reveal it's immediate so the
-   element is paintable while opacity ramps back to 1.
+   Active/reflecting: scroll locked. The nav (Ojaq + auth chip) stays — the
+   user always knows where they are and can sign in/out from the chip. Only
+   the editorial body, hero copy, and footer fade out, leaving the orb as
+   the focal point. Live transcripts fade in below the orb during active.
+   Visibility delay on hide preserves layout during the fade. */
 
-   The orb itself doesn't move — it stays centered in the hero, which is now
-   the only visible region. What changes is its presentation: blur + dim
-   lifts in active/reflecting so the orb sharpens into focus. */
-
-.nav,
 .hero-content,
 .editorial,
 footer {
@@ -189,11 +183,9 @@ body.session-reflecting {
   overflow: hidden;
 }
 
-body.session-active .nav,
 body.session-active .hero-content,
 body.session-active .editorial,
 body.session-active footer,
-body.session-reflecting .nav,
 body.session-reflecting .hero-content,
 body.session-reflecting .editorial,
 body.session-reflecting footer {
@@ -218,6 +210,44 @@ body.session-reflecting .end-btn {
   opacity: 0;
   pointer-events: none;
 }
+
+body.session-active #transcripts {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 600ms ease 200ms;
+}
+
+/* ── Live transcripts (visible during active session only) ────────────
+   Two soft lines beneath the orb — last user utterance and last Ojaq
+   response. Async presence updates the orb in parallel; this is the
+   surface representation of what's flowing. */
+#transcripts {
+  position: fixed;
+  left: 50%;
+  bottom: 130px;
+  transform: translateX(-50%);
+  width: min(680px, 88vw);
+  text-align: center;
+  z-index: 15;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.t-line {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 10px;
+  min-height: 18px;
+  transition: color 400ms ease;
+}
+
+.t-line:last-child { margin-bottom: 0; }
+
+.t-line.you { color: rgba(232, 232, 240, 0.55); }
+.t-line.ojaq { color: var(--accent); opacity: 0.85; }
 
 .reflection {
   position: fixed;
@@ -297,6 +327,12 @@ body.reflection-visible .reflection {
 
 .reflect-submit:hover { color: var(--text); border-color: var(--accent); }
 
+.reflect-actions {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
 .reflect-tertiary {
   font-family: inherit;
   font-size: 11px;
@@ -315,18 +351,17 @@ body.reflection-visible .reflection {
 
 .reflect-tertiary:hover { color: var(--text); }
 
-/* ── editorial sections ──────────────────────────────────────────────── */
+/* ── editorial sections (matches production landing dims) ────────────── */
 .editorial {
-  max-width: 880px;
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 160px 40px 120px;
 }
 
 .section {
-  margin-bottom: 160px;
+  padding: 120px 24px;
 }
-
-.section:last-child { margin-bottom: 0; }
 
 .kicker {
   font-size: 11px;
@@ -334,25 +369,22 @@ body.reflection-visible .reflection {
   letter-spacing: 4px;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 36px;
+  margin-bottom: 24px;
 }
 
 .section h2 {
-  font-size: clamp(28px, 4vw, 48px);
+  font-size: clamp(24px, 4vw, 40px);
   font-weight: 300;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  margin-bottom: 36px;
-  max-width: 720px;
+  line-height: 1.3;
+  margin-bottom: 32px;
 }
 
 .section p {
   font-size: 17px;
   font-weight: 300;
-  line-height: 1.75;
+  line-height: 1.8;
   color: var(--muted);
-  margin-bottom: 28px;
-  max-width: 640px;
+  margin-bottom: 24px;
 }
 
 .section p strong {
@@ -601,9 +633,7 @@ footer a:hover { color: var(--muted); }
 }
 #account-signout:hover { color: var(--text); }
 
-/* Suppress chip during session + reflection — uncluttered moment */
-body.session-active #account-chip,
-body.session-reflecting #account-chip { display: none; }
+/* Chip stays visible across all states — orientation matters during session */
 
 /* ── login modal ──────────────────────────────────────────────────────── */
 #login-modal {
@@ -818,16 +848,11 @@ body.session-reflecting #account-chip { display: none; }
 #paywall-close:hover { color: var(--text); }
 
 /* ── responsive ──────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .nav { padding: 24px 24px; }
-  .nav .brand { letter-spacing: 3px; }
-  .hero { padding: 24px 24px 60px; }
-  .orb-container { margin-bottom: 56px; }
-  .hero-sub { margin-bottom: 40px; }
-  .editorial { padding: 100px 24px 80px; }
-  .section { margin-bottom: 100px; }
-  .kicker { margin-bottom: 24px; }
-  .section h2 { margin-bottom: 24px; }
+@media (max-width: 600px) {
+  .nav { padding: 20px 20px; }
+  .nav .brand { letter-spacing: 4px; }
+  .section { padding: 80px 20px; }
+  #transcripts { bottom: 110px; }
   #paywall-packages { flex-direction: column; align-items: stretch; }
   .paywall-pkg { max-width: none; }
 }

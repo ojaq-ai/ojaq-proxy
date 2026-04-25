@@ -81,6 +81,12 @@
   </div>
 </main>
 
+<!-- Live transcripts — visible only while session is active -->
+<div id="transcripts">
+  <p class="t-line you" id="t-user"></p>
+  <p class="t-line ojaq" id="t-model"></p>
+</div>
+
 <button id="end-session" class="end-btn" type="button">End</button>
 
 <!-- Post-session reflection — fades in 2s after End -->
@@ -90,7 +96,10 @@
     <input type="email" id="reflect-email" placeholder="your@email.com" required autocomplete="email">
     <button type="submit" class="reflect-submit">Save</button>
   </form>
-  <button type="button" class="reflect-tertiary" id="reflect-tertiary">Start another</button>
+  <div class="reflect-actions">
+    <button type="button" class="reflect-tertiary" id="reflect-tertiary">Start another</button>
+    <button type="button" class="reflect-tertiary" id="reflect-home">Back to home</button>
+  </div>
 </div>
 
 <div class="editorial">
