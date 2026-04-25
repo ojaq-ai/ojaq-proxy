@@ -26,6 +26,24 @@ LANDING_HTML = _ROOT / "landing" / "index.html"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# ── Founding Members env (loaded but optional — billing inert until all set) ─
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM = os.getenv("RESEND_FROM", "Ojaq <hello@ojaq.ai>")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_PRICE_STARTER = os.getenv("STRIPE_PRICE_STARTER", "")
+STRIPE_PRICE_RITUAL = os.getenv("STRIPE_PRICE_RITUAL", "")
+STRIPE_PRICE_EVERGREEN = os.getenv("STRIPE_PRICE_EVERGREEN", "")
+APP_URL = os.getenv("APP_URL", "http://localhost:8000")
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", "")  # ".ojaq.ai" in prod, empty for dev
+
+_BILLING_CONFIGURED = bool(
+    RESEND_API_KEY and STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET
+    and STRIPE_PRICE_STARTER and STRIPE_PRICE_RITUAL and STRIPE_PRICE_EVERGREEN
+)
+logger_init = logging.getLogger("ojaq-proxy.boot")
+logger_init.info(f"founding-members billing configured: {_BILLING_CONFIGURED}")
+
 app = FastAPI(title="ojaq-proxy")
 
 
@@ -65,6 +83,12 @@ import uuid
 _DATA_DIR = Path("/data") if Path("/data").is_dir() else _ROOT
 SESSIONS_LOG = _DATA_DIR / "sessions.jsonl"
 WAITLIST_FILE = _DATA_DIR / "waitlist.jsonl"
+
+# Founding Members storage subdirs — wallet (per-email JSON) + auth (sessions, magic tokens)
+WALLET_DIR = _DATA_DIR / "wallet"
+AUTH_DIR = _DATA_DIR / "auth"
+WALLET_DIR.mkdir(parents=True, exist_ok=True)
+AUTH_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Rate limiting (in-memory only, never persisted) ──────────────────────
