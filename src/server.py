@@ -90,6 +90,11 @@ AUTH_DIR = _DATA_DIR / "auth"
 WALLET_DIR.mkdir(parents=True, exist_ok=True)
 AUTH_DIR.mkdir(parents=True, exist_ok=True)
 
+# Founding Members auth — magic link, sessions, /me, logout
+from auth import router as auth_router, init_auth
+init_auth(auth_dir=AUTH_DIR, app_url=APP_URL, cookie_domain=COOKIE_DOMAIN)
+app.include_router(auth_router)
+
 
 # ── Rate limiting (in-memory only, never persisted) ──────────────────────
 _rate_map = {}  # ip -> [timestamp, ...]
