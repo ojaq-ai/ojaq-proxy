@@ -18,7 +18,8 @@ export class EmotionConnection {
     this._ws = null;
     this._state = 'idle'; // idle | connecting | open | closed
     this.onOpen = null;     // () => void
-    this.onEmotion = null;  // ({emotion, intensity, arousal, valence, dominance, ts}) => void
+    this.onEmotion = null;  // ({emotion, intensity, raw_emotion, raw_score}) => void
+    this.onSummary = null;  // ({n_reads, top, confidence_index, dominant} | {empty:true}) => void
     this.onClose = null;    // (code, reason) => void
     this.onError = null;    // (err) => void
   }
@@ -46,7 +47,10 @@ export class EmotionConnection {
     this._ws.onmessage = (ev) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : null;
-        if (data && typeof data === 'object' && data.emotion) {
+        if (!data || typeof data !== 'object') return;
+        if (data.summary) {
+          this.onSummary?.(data.summary);
+        } else if (data.emotion) {
           this.onEmotion?.(data);
         }
       } catch (err) {
@@ -73,6 +77,24 @@ export class EmotionConnection {
       this.onError?.(err);
       return false;
     }
+  }
+
+  /** Ask the proxy for an aggregated summary of all reads since the
+   *  last reset/summary call. Reply arrives via onSummary. The Voice
+   *  character uses this on each turn-complete to inject a structured
+   *  prosody report into Gemini's next turn. */
+  requestSummary() {
+    if (this._state !== 'open' || !this._ws) return false;
+    try { this._ws.send(JSON.stringify({ cmd: 'summary' })); return true; }
+    catch (err) { this.onError?.(err); return false; }
+  }
+
+  /** Discard the per-connection prediction buffer without asking for
+   *  a summary. Useful at session start. */
+  resetReads() {
+    if (this._state !== 'open' || !this._ws) return false;
+    try { this._ws.send(JSON.stringify({ cmd: 'reset' })); return true; }
+    catch { return false; }
   }
 
   close() {

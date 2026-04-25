@@ -123,6 +123,53 @@ def _hume_predict_to_plutchik(prediction: dict) -> tuple[str, float, str, float]
     return plutchik, raw_score, raw_name, raw_score
 
 
+# Confidence index inputs — empirically chosen Hume labels that signal
+# "settled / sure / expansive" minus "tight / unsure / contracted".
+# Used by the Voice character to coach toward bodily presence.
+_CONFIDENCE_POS = ["Determination", "Pride", "Calmness", "Triumph", "Satisfaction"]
+_CONFIDENCE_NEG = ["Anxiety", "Doubt", "Shame", "Distress", "Tiredness"]
+
+
+def _aggregate_reads(reads: list[dict]) -> dict:
+    """Compress a list of per-window prediction summaries into one
+    structured turn-level read. Returned to the client when it asks
+    for a summary (typically right after the user's turn ends).
+    Format kept compact so a [PROSODY_REPORT: ...] inject stays short."""
+    if not reads:
+        return {"empty": True, "n_reads": 0}
+
+    # Per-fine-grained-emotion mean score across reads
+    by_label: dict[str, list[float]] = {}
+    for r in reads:
+        name = r.get("raw_emotion") or r.get("emotion") or ""
+        score = float(r.get("raw_score") or r.get("intensity") or 0)
+        if not name:
+            continue
+        by_label.setdefault(name, []).append(score)
+    means = {k: sum(v) / len(v) for k, v in by_label.items()}
+
+    # Top 3 fine-grained emotions
+    top = sorted(means.items(), key=lambda x: -x[1])[:3]
+
+    # Confidence index — bounded ~ -1..+1 in practice (each side sums
+    # at most 5 emotions each capped near 1.0, but realistically <0.5).
+    pos = sum(means.get(k, 0.0) for k in _CONFIDENCE_POS)
+    neg = sum(means.get(k, 0.0) for k in _CONFIDENCE_NEG)
+    confidence = pos - neg
+
+    # Dominant Plutchik bucket across reads
+    from collections import Counter
+    counts = Counter(r.get("emotion", "neutral") for r in reads)
+    dominant = counts.most_common(1)[0][0] if counts else "neutral"
+
+    return {
+        "n_reads": len(reads),
+        "top": [{"emotion": k, "score": round(v, 2)} for k, v in top],
+        "confidence_index": round(confidence, 2),
+        "dominant": dominant,
+    }
+
+
 @router.websocket("/emotion-ws")
 async def emotion_ws(websocket: WebSocket):
     await websocket.accept()
@@ -143,11 +190,35 @@ async def emotion_ws(websocket: WebSocket):
         ) as hume:
             buffer = bytearray()
             bytes_since_last_send = 0
+            # Per-connection rolling list of recent predictions. Used by
+            # the Voice character to compile a turn-level summary on
+            # demand (client sends {"cmd":"summary"}).
+            recent_reads: list[dict] = []
 
             async def client_to_hume():
-                nonlocal buffer, bytes_since_last_send
+                nonlocal buffer, bytes_since_last_send, recent_reads
                 while True:
-                    data = await websocket.receive_bytes()
+                    msg = await websocket.receive()
+                    if msg.get("type") == "websocket.disconnect":
+                        return
+
+                    # Text frame = control message (summary / reset)
+                    if msg.get("text") is not None:
+                        try:
+                            cmd_obj = json.loads(msg["text"])
+                        except Exception:
+                            continue
+                        cmd = cmd_obj.get("cmd")
+                        if cmd == "summary":
+                            summary = _aggregate_reads(recent_reads)
+                            await websocket.send_json({"summary": summary})
+                            recent_reads = []
+                        elif cmd == "reset":
+                            recent_reads = []
+                        continue
+
+                    # Binary frame = audio PCM
+                    data = msg.get("bytes")
                     if not data:
                         continue
                     buffer.extend(data)
@@ -185,7 +256,16 @@ async def emotion_ws(websocket: WebSocket):
                         if not result:
                             continue
                         plutchik, score, raw_name, raw_score = result
-                        # Gate weak reads — orb falls back to sentiment baseline
+                        # Always record into recent_reads — even gated
+                        # reads carry signal for the turn-level summary.
+                        recent_reads.append({
+                            "emotion": plutchik,
+                            "intensity": raw_score,
+                            "raw_emotion": raw_name,
+                            "raw_score": raw_score,
+                        })
+                        # Gate weak reads from the per-tick stream —
+                        # orb falls back to sentiment baseline on noise.
                         if raw_score < INTENSITY_GATE:
                             continue
                         await websocket.send_json({

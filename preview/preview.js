@@ -208,6 +208,13 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       if (u) analyzePresence(u, m);
       lastUserText = '';
       lastModelText = '';
+      // Voice character: request the turn's prosody summary. The reply
+      // arrives via emotion.onSummary which injects a [PROSODY_REPORT]
+      // marker into Gemini's next turn. Other characters skip this —
+      // the summary endpoint is a no-op for them.
+      if (framework.id === 'voice') {
+        emotion?.requestSummary();
+      }
     };
     gemini.onClose = (code, reason) => {
       log(`ws closed ${code} ${reason || ''}`);
@@ -233,6 +240,22 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       // be re-throttled later if it gets noisy.
       const raw = data.raw_emotion ? ` <- ${data.raw_emotion}` : '';
       log(`emotion: ${data.emotion} (${data.intensity.toFixed(2)})${raw}`);
+    };
+    // Voice character only — receives turn-level prosody summaries and
+    // injects them into Gemini's next turn so the AI can coach on HOW
+    // the user spoke, not just WHAT they said. No-op for other chars.
+    emotion.onSummary = (summary) => {
+      if (framework.id !== 'voice' || !gemini) return;
+      if (summary.empty || (summary.n_reads || 0) === 0) {
+        log('prosody summary: empty (no reads in turn)');
+        return;
+      }
+      const top = (summary.top || []).map(t => `${t.emotion}(${t.score})`).join(' ');
+      const inject =
+        `[PROSODY_REPORT: confidence_index=${summary.confidence_index} ` +
+        `dominant=${summary.dominant} top=${top} n_reads=${summary.n_reads}]`;
+      gemini.sendText(inject);
+      log(`-> ${inject}`);
     };
     emotion.onError = (err) => log(`emotion ws error: ${err?.message || err}`);
     emotion.connect();
