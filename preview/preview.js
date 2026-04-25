@@ -144,4 +144,41 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state === 'reflecting') dismissReflection();
 });
 
+// ── Waitlist form (mobile-launch capture) ──────────────────────────────
+const $waitlistForm = document.getElementById('waitlist-form');
+const $waitlistEmail = document.getElementById('waitlist-email');
+const $waitlistNote = document.getElementById('waitlist-note');
+$waitlistForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = ($waitlistEmail.value || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    $waitlistNote.textContent = 'Enter a valid email.';
+    return;
+  }
+  // Local dedupe via the same key the production landing uses
+  const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
+  if (sent.includes(email.toLowerCase())) {
+    $waitlistNote.textContent = "You're already on the list.";
+    return;
+  }
+  try {
+    const r = await fetch('/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, source: 'preview_mobile_waitlist' }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      sent.push(email.toLowerCase());
+      localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
+      $waitlistEmail.value = '';
+      $waitlistNote.textContent = "You're in. We'll be in touch.";
+    } else {
+      $waitlistNote.textContent = 'Something went wrong. Try again.';
+    }
+  } catch {
+    $waitlistNote.textContent = 'Network error. Try again.';
+  }
+});
+
 log('preview ready');
