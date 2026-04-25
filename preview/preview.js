@@ -208,11 +208,13 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       if (u) analyzePresence(u, m);
       lastUserText = '';
       lastModelText = '';
-      // Voice character: request the turn's prosody summary. The reply
-      // arrives via emotion.onSummary which injects a [PROSODY_REPORT]
-      // marker into Gemini's next turn. Other characters skip this —
-      // the summary endpoint is a no-op for them.
-      if (framework.id === 'voice') {
+      // Voice character: request a turn-level prosody summary ONLY if
+      // the user actually spoke this turn. turnComplete also fires after
+      // our [PROSODY_REPORT] inject (Gemini treats the inject as another
+      // user input and replies/acks); on those rounds `u` is empty
+      // because sendText never produces a transcript. Gating on `u`
+      // suppresses the spurious second summary request per round.
+      if (framework.id === 'voice' && u) {
         emotion?.requestSummary();
       }
     };
@@ -246,10 +248,10 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     // the user spoke, not just WHAT they said. No-op for other chars.
     emotion.onSummary = (summary) => {
       if (framework.id !== 'voice' || !gemini) return;
-      if (summary.empty || (summary.n_reads || 0) === 0) {
-        log('prosody summary: empty (no reads in turn)');
-        return;
-      }
+      // Empty summaries (very short utterance below the 3s window or
+      // a bookkeeping race) silently skip — the next user turn will
+      // produce reads and we'll inject then.
+      if (summary.empty || (summary.n_reads || 0) === 0) return;
       const top = (summary.top || []).map(t => `${t.emotion}(${t.score})`).join(' ');
       const inject =
         `[PROSODY_REPORT: confidence_index=${summary.confidence_index} ` +
