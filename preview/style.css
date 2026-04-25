@@ -146,6 +146,23 @@ body.session-reflecting .orb-backdrop {
   transform: translateY(-1px);
 }
 
+/* Privacy reassurance below the CTA — same line the production playground
+   uses, so the trust language is consistent across surfaces. */
+.trust-line {
+  font-size: 13px;
+  color: #7a7a86;
+  text-align: center;
+  margin: 18px 0 0;
+  line-height: 1.5;
+}
+.trust-line a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 200ms ease;
+}
+.trust-line a:hover { color: var(--text); }
+
 /* ── End session button (only visible while session active) ───────────── */
 .end-btn {
   position: fixed;
@@ -265,7 +282,7 @@ body.session-active #transcripts {
   padding: 0 24px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 800ms ease;
+  transition: opacity 500ms ease;
   z-index: 20;
   display: flex;
   flex-direction: column;

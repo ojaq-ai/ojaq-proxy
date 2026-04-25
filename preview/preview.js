@@ -42,8 +42,19 @@ let lastModelText = '';
 
 // Idle preset: low energy + low engagement keep the orb's drift slow and
 // meditative. The hero shouldn't feel like a busy screensaver while users
-// read. Conductor takes over speed/depth once a session activates.
+// read. Conductor takes over speed/depth once presence reads come in.
 const IDLE_PRESENCE = { energy: 12, confidence: 50, resistance: 5, engagement: 25, congruence: 60, sentiment: 0.1 };
+
+// Session-start preset: the orb visibly shifts to "listening" the moment
+// activate runs — moderate energy, high engagement, neutral resistance.
+// This carries the user from the meditative landing into a present-and-alert
+// state during the 1–2 turns before /analyze returns its first read.
+const SESSION_START_PRESENCE = { energy: 50, confidence: 65, resistance: 10, engagement: 70, congruence: 70, sentiment: 0.2 };
+
+// Smoothed presence buffer — softens jumps between consecutive /analyze
+// reads so a single noisy turn doesn't whip the orb. Each new presence
+// blends 50/50 with the previous before we hand it to the avatar.
+let _smoothedPresence = null;
 
 function setBodyState(target) {
   document.body.classList.remove('session-active', 'session-reflecting', 'reflection-visible');
@@ -70,8 +81,12 @@ async function activate() {
   log('session activating…');
 
   try {
-    // Reset per-session presence pipeline
+    // Reset per-session presence pipeline + lift the orb from idle drift
+    // into "listening" right now, before the first /analyze even fires.
     presenceHistory = new PresenceHistory(20);
+    _smoothedPresence = null;
+    avatar.setMode('reflect');
+    avatar.setPresence(SESSION_START_PRESENCE);
     const framework = FRAMEWORKS.coaching;
     conductor = new SessionConductor(framework);
     conductor.onChange(({ phase, mode, depth }) => {
@@ -140,6 +155,26 @@ function teardownVoice() {
   presenceHistory = null;
 }
 
+// Blend a fresh presence read 50/50 with the previous smoothed value so
+// the avatar tween doesn't get a sudden new target every turn. The
+// avatar still does its own 4%/frame ease-in toward target, but a damped
+// target halves the perceived velocity of presence-driven reactions.
+function blendPresence(newP) {
+  const keys = ['energy', 'confidence', 'resistance', 'engagement', 'congruence', 'sentiment'];
+  if (!_smoothedPresence) {
+    _smoothedPresence = {};
+    for (const k of keys) _smoothedPresence[k] = newP[k] ?? 0;
+    return { ..._smoothedPresence };
+  }
+  const a = 0.5; // 0 = no change, 1 = instant
+  for (const k of keys) {
+    if (typeof newP[k] === 'number') {
+      _smoothedPresence[k] = _smoothedPresence[k] * (1 - a) + newP[k] * a;
+    }
+  }
+  return { ..._smoothedPresence };
+}
+
 // Async presence analysis — runs parallel to the voice loop. Never awaited
 // from anything on the audio path, so a slow /analyze never adds latency.
 // Mirrors the production pipeline in /playground/app.js.
@@ -154,11 +189,11 @@ async function analyzePresence(userText, modelText) {
     const p = await r.json();
     if (!p || p.error) return;
     presenceHistory?.push(p);
-    avatar.setPresence(p);
-    // Conductor reads the new presence and may decide to shift mode/depth.
-    // We don't surface its [CMD:*] outputs here — /preview keeps the model
-    // run uninterrupted; only the orb reflects the read.
+    // Conductor reads the raw presence (we want its phase/mode logic to
+    // see actual values, not the smoothed envelope).
     conductor?.onPresence(p, () => {});
+    // Avatar reads the smoothed presence — softer transitions between turns.
+    avatar.setPresence(blendPresence(p));
     log(`presence e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
   } catch {
     // Silent — never let presence interrupt anything
@@ -172,13 +207,14 @@ function endSession() {
   setBodyState('reflecting');
   // Keep the auth chip suppressed through the reflection moment too —
   // it's uncluttered intentionally. Restored in dismissReflection.
-  avatar.settleToRest(2500);
+  avatar.settleToRest(1200);
   resetReflection();
-  log('reflection began (2s hold)');
-  // After the 2s exhale, fade in the soft offer.
+  log('reflection began');
+  // Brief pause then reveal the soft offer — quicker than the prior 2s,
+  // still long enough to feel like a breath rather than a snap.
   reflectionRevealTimer = setTimeout(() => {
     if (state === 'reflecting') document.body.classList.add('reflection-visible');
-  }, 2000);
+  }, 700);
 }
 
 function dismissReflection() {
