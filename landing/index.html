@@ -242,6 +242,63 @@ section p strong {
   color: var(--muted);
 }
 
+/* ── pricing (Founding Members) ── */
+.packs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.pack {
+  padding: 32px 24px;
+  border: 1px solid #1a1a24;
+  border-radius: 14px;
+  background: #0c0c14;
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.pack:hover {
+  border-color: var(--accent);
+  background: #100f1a;
+  transform: translateY(-2px);
+}
+
+.pack-name {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.pack-price {
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.pack-amount {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.pack-desc {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+}
+
 /* ── waitlist ── */
 .waitlist {
   text-align: center;
@@ -446,6 +503,32 @@ footer {
         <p>A third voice in the room. For two people who want a witness, not a mediator. Hears what moves between them. Speaks rarely. Listens fully.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ── pricing (Founding Members) ── -->
+<section>
+  <div class="section-label">Continue with Ojaq</div>
+  <h2>Choose a pack.</h2>
+  <div class="packs">
+    <a class="pack" href="/playground">
+      <div class="pack-name">Starter</div>
+      <div class="pack-price">$29</div>
+      <div class="pack-amount">10 sessions</div>
+      <p class="pack-desc">Ephemeral by design — nothing saved, nothing kept. Begin where you are.</p>
+    </a>
+    <a class="pack" href="/playground">
+      <div class="pack-name">Ritual</div>
+      <div class="pack-price">$79</div>
+      <div class="pack-amount">30 sessions</div>
+      <p class="pack-desc">For the conversations you return to. A practice, not a product.</p>
+    </a>
+    <a class="pack" href="/playground">
+      <div class="pack-name">Evergreen</div>
+      <div class="pack-price">$199 / year</div>
+      <div class="pack-amount">Unlimited sessions</div>
+      <p class="pack-desc">For when Ojaq becomes part of how you think.</p>
+    </a>
   </div>
 </section>
 
