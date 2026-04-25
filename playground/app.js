@@ -7,6 +7,7 @@ import { SortformerConnection } from './sortformer.js';
 import { Avatar } from './avatar.js';
 import { SessionConductor } from './conductor.js';
 import { mapEmotion, PresenceHistory } from './presence.js';
+import * as billing from './billing.js';
 
 // ── DOM ─────────────────────────────────────────────────────────────────
 const $tabs       = document.getElementById('tabs');
@@ -303,6 +304,17 @@ async function start() {
   $btn.disabled = true;
   log(`starting ${currentFramework.name} session...`);
 
+  // Pre-flight credit check — for authed users with 0 credits and no evergreen,
+  // show the paywall before doing any expensive setup (gemini connect, mic init).
+  // Server-side /session/start returns 402 as the safety net for race conditions.
+  const userState = billing.getState();
+  if (userState && !userState.evergreenActive && (userState.credits ?? 0) <= 0) {
+    log('pre-flight: authed but no credits — showing paywall');
+    billing.showPaywall({ allowLogin: false });
+    $btn.disabled = false;
+    return;
+  }
+
   try {
     // reset state
     presenceHistory = new PresenceHistory(20);
@@ -435,21 +447,30 @@ async function start() {
     // go
     running = true;
     turnCount = 0;
+    billing.setSessionActive(true); // hide account chip during the session
     await requestWakeLock();
     $btnIcon.innerHTML = '&#9632;';
     $btnText.textContent = 'End Session';
     $btn.classList.add('stop');
 
-    // log session start (with rate limit check)
+    // log session start (with rate limit + paywall checks)
     try {
       const r = await fetch('/session/start', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ framework: currentFramework.id }),
       });
       if (r.status === 429) {
+        // Unauthed + IP rate limited — paywall with login option
         stop();
-        showExperiencedState();
+        billing.showPaywall({ allowLogin: true });
+        return;
+      }
+      if (r.status === 402) {
+        // Authed but no credits — paywall, no login option
+        stop();
+        billing.showPaywall({ allowLogin: false });
         return;
       }
       const d = await r.json();
@@ -457,6 +478,9 @@ async function start() {
     } catch {};
     setControlsEnabled(true);
     timerInterval = setInterval(updateTimer, 1000);
+
+    // Fire-and-forget credit deduct for authed users (unauthed users use IP rate limit instead)
+    billing.deductCredit().catch(() => {});
 
     // opening greeting — small delay to ensure WS is fully ready
     startupTimer = setTimeout(() => {
@@ -506,6 +530,7 @@ function stop() {
   sessionId = null;
   turnCount = 0;
   running = false;
+  billing.setSessionActive(false); // restore account chip after the session
   mic?.stop(); mic = null;
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
@@ -677,103 +702,7 @@ $quickCmds.querySelectorAll('button').forEach(btn => {
 
 setControlsEnabled(false);
 
-// ── experienced state (rate limited) ─────────────────────────────────────
-function showExperiencedState() {
-  // Hide normal UI
-  document.getElementById('controls').style.display = 'none';
-  document.getElementById('sidebar').style.display = 'none';
-  document.getElementById('tabs').style.display = 'none';
-  document.getElementById('overlay').style.display = 'none';
-
-  // Settle orbs to calm idle
-  avatar.settleToRest(2500);
-
-  // Show reflection screen with rate-limit copy
-  const $ref = document.getElementById('reflection');
-  const $dur = document.getElementById('reflect-duration');
-  const $sig = document.getElementById('reflect-signal');
-  const $email = document.getElementById('reflect-email');
-  const $emailSubmit = document.getElementById('reflect-email-submit');
-  const $note = document.getElementById('reflect-wl-note');
-  const $fb = document.getElementById('reflect-fb');
-  const $fbSubmit = document.getElementById('reflect-fb-submit');
-
-  $dur.style.display = 'none';
-  $sig.style.display = 'none';
-
-  // Override waitlist block copy for the rate-limited state
-  const wl = document.getElementById('reflect-waitlist');
-  const cta = wl.querySelector('.reflect-cta');
-  const sub = wl.querySelector('.reflect-sub');
-  if (cta) cta.textContent = "You've spent time with Ojaq today.";
-  if (sub) sub.textContent = "The mobile app is where it goes deeper. I'll find you when it's ready.";
-
-  $email.value = '';
-  $email.style.display = '';
-  $emailSubmit.style.display = '';
-  $emailSubmit.disabled = false;
-  $note.textContent = '';
-  $fb.value = '';
-  $ref.style.display = 'flex';
-
-  const submitEmail = async () => {
-    const email = $email.value.trim();
-    if (!email) return;
-
-    const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
-    if (sent.includes(email.toLowerCase())) {
-      $note.textContent = "You're already on the list.";
-      return;
-    }
-
-    $emailSubmit.disabled = true;
-    try {
-      const r = await fetch('/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, source: 'rate_limit' }),
-      });
-      const d = await r.json();
-      if (d.ok) {
-        sent.push(email.toLowerCase());
-        localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
-        $email.style.display = 'none';
-        $emailSubmit.style.display = 'none';
-        $note.textContent = "You're in. I'll find you when it's ready.";
-      } else {
-        $emailSubmit.disabled = false;
-      }
-    } catch {
-      $note.textContent = 'Something went wrong. Try again.';
-      $emailSubmit.disabled = false;
-    }
-  };
-  $email.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitEmail(); } };
-  $emailSubmit.onclick = submitEmail;
-
-  const submitFb = async () => {
-    const text = $fb.value.trim();
-    if (!text) return;
-    try {
-      await fetch('/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, duration_s: 0, framework: 'rate_limit' }),
-      });
-      $fb.value = '';
-      $fb.placeholder = 'Thank you.';
-      setTimeout(() => { $fb.placeholder = 'What sticks with you?'; }, 4000);
-    } catch {}
-  };
-  $fb.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFb(); } };
-  $fb.onblur = () => submitFb();
-  $fbSubmit.onclick = submitFb;
-
-  // Hide "Another session" — user is rate-limited, starting another would just fail
-  document.getElementById('reflect-another').style.display = 'none';
-}
-
-// ── page load: check rate limit status before showing UI ────────────────
+// ── page load: render UI, then decide whether to show paywall on top ────
 function showNormalUI() {
   document.getElementById('tabs').style.display = '';
   document.getElementById('sidebar').style.display = '';
@@ -781,17 +710,26 @@ function showNormalUI() {
 }
 
 (async () => {
+  // Resolve auth state first so the paywall decision below knows who's logged in
+  await billing.init();
+
+  let sessionsRemaining = null;
   try {
     const r = await fetch('/session/status');
     const d = await r.json();
-    if (d.sessions_remaining === 0) {
-      showExperiencedState();
-    } else {
-      showNormalUI();
-    }
-  } catch {
-    // If status check fails, show normal UI as fallback
-    showNormalUI();
+    sessionsRemaining = d.sessions_remaining;
+  } catch {}
+
+  showNormalUI();
+
+  // Page-load paywall: ONLY for unauthed users who've exhausted the IP free tier.
+  // This matches the old showExperiencedState trigger — we don't want to confront
+  // authed-no-credits users before they even click Start. Their paywall comes
+  // from the start() pre-flight + the server's 402 fallback.
+  const me = billing.getState();
+  const unauthedAndExhausted = !me && sessionsRemaining === 0;
+  if (unauthedAndExhausted) {
+    billing.showPaywall({ allowLogin: true });
   }
 })();
 

@@ -26,6 +26,24 @@ LANDING_HTML = _ROOT / "landing" / "index.html"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# ── Founding Members env (loaded but optional — billing inert until all set) ─
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM = os.getenv("RESEND_FROM", "Ojaq <hello@ojaq.ai>")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_PRICE_STARTER = os.getenv("STRIPE_PRICE_STARTER", "")
+STRIPE_PRICE_RITUAL = os.getenv("STRIPE_PRICE_RITUAL", "")
+STRIPE_PRICE_EVERGREEN = os.getenv("STRIPE_PRICE_EVERGREEN", "")
+APP_URL = os.getenv("APP_URL", "http://localhost:8000")
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", "")  # ".ojaq.ai" in prod, empty for dev
+
+_BILLING_CONFIGURED = bool(
+    RESEND_API_KEY and STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET
+    and STRIPE_PRICE_STARTER and STRIPE_PRICE_RITUAL and STRIPE_PRICE_EVERGREEN
+)
+logger_init = logging.getLogger("ojaq-proxy.boot")
+logger_init.info(f"founding-members billing configured: {_BILLING_CONFIGURED}")
+
 app = FastAPI(title="ojaq-proxy")
 
 
@@ -65,6 +83,34 @@ import uuid
 _DATA_DIR = Path("/data") if Path("/data").is_dir() else _ROOT
 SESSIONS_LOG = _DATA_DIR / "sessions.jsonl"
 WAITLIST_FILE = _DATA_DIR / "waitlist.jsonl"
+
+# Founding Members storage subdirs — wallet (per-email JSON) + auth (sessions, magic tokens)
+WALLET_DIR = _DATA_DIR / "wallet"
+AUTH_DIR = _DATA_DIR / "auth"
+WALLET_DIR.mkdir(parents=True, exist_ok=True)
+AUTH_DIR.mkdir(parents=True, exist_ok=True)
+
+# Founding Members auth — magic link, sessions, /me, logout
+from auth import router as auth_router, init_auth
+init_auth(auth_dir=AUTH_DIR, app_url=APP_URL, cookie_domain=COOKIE_DOMAIN)
+app.include_router(auth_router)
+
+# Founding Members wallet — credit balance + per-session deduct
+from wallet import router as wallet_router, init_wallet
+init_wallet(wallet_dir=WALLET_DIR)
+app.include_router(wallet_router)
+
+# Founding Members billing — Stripe checkout + webhook → wallet credits
+from billing import router as billing_router, init_billing
+init_billing(
+    stripe_secret_key=STRIPE_SECRET_KEY,
+    webhook_secret=STRIPE_WEBHOOK_SECRET,
+    price_starter=STRIPE_PRICE_STARTER,
+    price_ritual=STRIPE_PRICE_RITUAL,
+    price_evergreen=STRIPE_PRICE_EVERGREEN,
+    app_url=APP_URL,
+)
+app.include_router(billing_router)
 
 
 # ── Rate limiting (in-memory only, never persisted) ──────────────────────
@@ -177,20 +223,37 @@ async def session_status(request: Request):
 
 @app.post("/session/start")
 async def session_start(request: Request):
-    ip = _get_client_ip(request)
-    if not _check_rate(ip):
-        return JSONResponse(
-            {"error": "rate_limited",
-             "message": "You've used your previews for today."},
-            status_code=429,
-        )
-    _record_rate(ip)
+    # Authed users with credits/evergreen bypass the IP rate limit.
+    # Authed users with NO credits → 402 paywall.
+    # Unauthed users fall through to the existing IP rate limit (free tier).
+    from auth import get_current_user_optional
+    from wallet import get_summary
+
+    email = get_current_user_optional(request)
+    if email:
+        summary = get_summary(email)
+        if not (summary.get("evergreenActive") or (summary.get("credits") or 0) > 0):
+            return JSONResponse(
+                {"error": "no_credits", "paywall": True},
+                status_code=402,
+            )
+        # Authed-with-credits → skip IP rate limit
+    else:
+        ip = _get_client_ip(request)
+        if not _check_rate(ip):
+            return JSONResponse(
+                {"error": "rate_limited",
+                 "message": "You've used your previews for today."},
+                status_code=429,
+            )
+        _record_rate(ip)
 
     body = await request.json()
     entry = {
         "event": "start",
         "session_id": str(uuid.uuid4())[:8],
         "framework": body.get("framework", "unknown"),
+        "email": email or None,  # null for unauthed sessions; useful for analytics
         "timestamp": datetime.datetime.utcnow().isoformat(),
     }
     with open(SESSIONS_LOG, "a") as f:

@@ -4,3 +4,5 @@ websockets
 google-genai
 python-dotenv
 httpx
+resend>=2.0
+stripe>=11.0
