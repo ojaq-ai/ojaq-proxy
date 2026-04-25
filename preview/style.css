@@ -70,7 +70,11 @@ body {
   opacity: 0.4;
   filter: blur(3px);
   pointer-events: none;
-  transition: opacity 700ms ease, filter 700ms ease;
+  /* Lift the orb cluster above viewport center on landing so it sits
+     visually above the title — closes the empty gap between the Begin
+     button and the top of the page. Restored to 0 in session-active. */
+  transform: translateY(-7vh);
+  transition: opacity 700ms ease, filter 700ms ease, transform 700ms ease;
 }
 
 .orb-backdrop canvas {
@@ -86,11 +90,13 @@ body.hero-out-of-view .orb-backdrop {
   opacity: 0.06;
 }
 
-/* Session states override scroll-based fade — orb is THE focus there. */
+/* Session states override scroll-based fade — orb is THE focus there.
+   Also drops the landing-only upward lift so the orb sits at true center. */
 body.session-active .orb-backdrop,
 body.session-reflecting .orb-backdrop {
   opacity: 1 !important;
   filter: none;
+  transform: translateY(0);
 }
 
 .hero-content {
@@ -236,6 +242,94 @@ body.session-active #transcripts {
   opacity: 1;
   pointer-events: auto;
   transition: opacity 600ms ease 200ms;
+}
+
+body.session-active #topics {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 500ms ease 300ms;
+}
+
+/* ── Topic rail (left side, active session only) ──────────────────────
+   Pill-shaped icon buttons in a vertical stack. The label is hidden by
+   default (icon-only resting state) and slides in on hover or when the
+   topic is active — keeps the rail unobtrusive while still legible. */
+#topics {
+  position: fixed;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 18;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.topic {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10px 12px;
+  font-family: inherit;
+  background: rgba(8, 8, 12, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  color: var(--muted);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: color 220ms ease, border-color 220ms ease, background 220ms ease, gap 220ms ease, padding-right 220ms ease;
+  overflow: hidden;
+  max-width: 44px;
+}
+
+.topic svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.topic-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  max-width: 0;
+  transition: opacity 220ms ease, max-width 220ms ease;
+}
+
+.topic:hover,
+.topic.active {
+  color: var(--text);
+  border-color: rgba(184, 160, 255, 0.4);
+  background: rgba(184, 160, 255, 0.08);
+  gap: 10px;
+  padding-right: 18px;
+  max-width: 180px;
+}
+
+.topic:hover .topic-label,
+.topic.active .topic-label {
+  opacity: 1;
+  max-width: 130px;
+}
+
+.topic.active {
+  border-color: var(--accent);
+}
+
+@media (max-width: 600px) {
+  #topics { left: 12px; gap: 8px; }
+  .topic { padding: 8px 10px; max-width: 38px; }
+  .topic svg { width: 16px; height: 16px; }
+  .topic-label { display: none; }
+  .topic:hover, .topic.active { padding-right: 10px; max-width: 38px; gap: 0; }
 }
 
 /* ── Live transcripts (visible during active session only) ────────────

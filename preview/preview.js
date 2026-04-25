@@ -66,6 +66,17 @@ async function activate() {
   if (state === 'active') return;
   // Allow Begin click during a lingering reflection to skip straight into a new session
   if (state === 'reflecting') resetReflection();
+
+  // Pre-flight credit check — authed users with no credits and no
+  // evergreen subscription get the paywall before we tear down the
+  // landing chrome. Same gate the production playground uses.
+  const userState = billing.getState();
+  if (userState && !userState.evergreenActive && (userState.credits ?? 0) <= 0) {
+    log('pre-flight: authed but no credits — showing paywall');
+    billing.showPaywall({ allowLogin: false });
+    return;
+  }
+
   state = 'active';
   setBodyState('active');
   billing.setSessionActive(true);
@@ -137,8 +148,20 @@ async function activate() {
       gemini?.sendText('[CMD:start]');
       log('-> [CMD:start]');
     }, 300);
+
+    // Deduct one credit on successful start. Fire-and-forget — the chip
+    // will reflect the new balance once /wallet/deduct returns. Server
+    // is the source of truth; if the deduct fails, the chip simply won't
+    // update (no double-charge, no aborted session).
+    billing.deductCredit().catch(() => {});
   } catch (err) {
     log(`activate failed: ${err.message}`);
+    // /token returns 402 once IP-level rate limit hits for unauthed users
+    // (or after server-side wallet check fails for authed). Surface the
+    // paywall so they have an obvious next step.
+    if (/402/.test(err.message || '')) {
+      billing.showPaywall({ allowLogin: !userState });
+    }
     state = 'idle';
     setBodyState('idle');
     billing.setSessionActive(false);
@@ -205,6 +228,7 @@ function endSession() {
   state = 'reflecting';
   teardownVoice();
   setBodyState('reflecting');
+  $topics.forEach((b) => b.classList.remove('active'));
   // Keep the auth chip suppressed through the reflection moment too —
   // it's uncluttered intentionally. Restored in dismissReflection.
   avatar.settleToRest(1200);
@@ -275,6 +299,33 @@ const $reflectTertiary = document.getElementById('reflect-tertiary');
 const $reflectHome = document.getElementById('reflect-home');
 const $tUser = document.getElementById('t-user');
 const $tModel = document.getElementById('t-model');
+const $topics = document.querySelectorAll('.topic');
+
+// ── Topic switcher ──────────────────────────────────────────────────────
+// Each click sends a brief natural-language inject to Gemini so the model
+// pivots to the chosen domain. Inject phrasing intentionally reads as user
+// input — the model treats it as a redirect from the speaker, not a system
+// command, which keeps responses grounded in the framework's voice.
+const TOPIC_INJECTS = {
+  work:         "Let's shift focus to my work — career, projects, what I'm building.",
+  relationship: "Let's talk about my relationships — connection, family, friends.",
+  growth:       "Let's focus on my personal growth — change, becoming, inner work.",
+  couple:       "Let's talk about my partnership — what's alive between us.",
+};
+
+function selectTopic(topic) {
+  if (state !== 'active' || !gemini) return;
+  $topics.forEach((b) => b.classList.toggle('active', b.dataset.topic === topic));
+  const inject = TOPIC_INJECTS[topic];
+  if (inject) {
+    gemini.sendText(inject);
+    log(`-> topic: ${topic}`);
+  }
+}
+
+$topics.forEach((b) => {
+  b.addEventListener('click', () => selectTopic(b.dataset.topic));
+});
 
 // ── Wiring ───────────────────────────────────────────────────────────────
 document.getElementById('begin-btn').addEventListener('click', activate);
