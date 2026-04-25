@@ -45,8 +45,10 @@ router = APIRouter()
 
 HUME_WS_URL = "wss://api.hume.ai/v0/stream/models"
 SAMPLE_RATE = 16000
-WINDOW_SECONDS = 3              # Hume processes ~3s windows well; trade-off
-WINDOW_BYTES = SAMPLE_RATE * 2 * WINDOW_SECONDS
+WINDOW_SECONDS = 3              # Hume needs ~3s for reliable prosodic features
+SLIDE_SECONDS = 1               # send a fresh 3s window every 1s of new audio
+WINDOW_BYTES = SAMPLE_RATE * 2 * WINDOW_SECONDS    # 96 KB
+SLIDE_BYTES  = SAMPLE_RATE * 2 * SLIDE_SECONDS     # 32 KB
 
 # Below this confidence on the top emotion we suppress the message —
 # the orb stays at sentiment baseline rather than flickering on weak
@@ -140,17 +142,31 @@ async def emotion_ws(websocket: WebSocket):
             ping_interval=20,
         ) as hume:
             buffer = bytearray()
+            bytes_since_last_send = 0
 
             async def client_to_hume():
-                nonlocal buffer
+                nonlocal buffer, bytes_since_last_send
                 while True:
                     data = await websocket.receive_bytes()
                     if not data:
                         continue
                     buffer.extend(data)
-                    while len(buffer) >= WINDOW_BYTES:
-                        chunk = bytes(buffer[:WINDOW_BYTES])
-                        del buffer[:WINDOW_BYTES]
+                    bytes_since_last_send += len(data)
+                    # Sliding window — every SLIDE_BYTES of new audio,
+                    # send the most recent WINDOW_BYTES (last 3s) to Hume.
+                    # Initial fire happens once buffer first hits 3s.
+                    while (len(buffer) >= WINDOW_BYTES and
+                           bytes_since_last_send >= SLIDE_BYTES):
+                        chunk = bytes(buffer[-WINDOW_BYTES:])
+                        # Trim front so the buffer stays at exactly the
+                        # window size — bounded memory.
+                        excess = len(buffer) - WINDOW_BYTES
+                        if excess > 0:
+                            del buffer[:excess]
+                        # Decrement (not reset) so a large incoming
+                        # frame can fire multiple slide events back to
+                        # back without losing accumulated audio.
+                        bytes_since_last_send -= SLIDE_BYTES
                         wav = _pcm_to_wav_bytes(chunk)
                         await hume.send(json.dumps({
                             "models": {"prosody": {}},
