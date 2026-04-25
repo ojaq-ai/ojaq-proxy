@@ -11,6 +11,26 @@ import * as billing from '/playground/billing.js';
 
 const log = (msg) => console.log(`[preview] ${msg}`);
 
+// ── Language detection ────────────────────────────────────────────────
+// Mirrors /playground/app.js so Gemini's ASR runs in the right locale and
+// the framework prompt knows which language to respond in. Without this,
+// Turkish (or any non-English) speech is transcribed as garbled English
+// phonemes and the model misunderstands.
+function detectLanguage() {
+  const nav = (navigator.language || '').trim();
+  if (!nav) return 'en-US';
+  if (nav.includes('-') && nav.length >= 4) return nav;
+  const map = {
+    tr: 'tr-TR', en: 'en-US', ja: 'ja-JP', es: 'es-ES',
+    fr: 'fr-FR', de: 'de-DE', pt: 'pt-BR', ar: 'ar-SA',
+    zh: 'zh-CN', it: 'it-IT', ru: 'ru-RU', ko: 'ko-KR',
+  };
+  const lang = nav.toLowerCase().split('-')[0];
+  return map[lang] || `${lang}-${lang.toUpperCase()}`;
+}
+const userLanguage = detectLanguage();
+const langBase = userLanguage.split('-')[0];
+
 // Mount the orb canvas in idle (passive drift) mode.
 const canvas = document.getElementById('orb-canvas');
 const avatar = new Avatar(canvas);
@@ -144,8 +164,8 @@ async function activate() {
     };
 
     const prompt = assemblePrompt(framework);
-    await gemini.connect(prompt, [], 'en-US');
-    log('gemini connected');
+    await gemini.connect(prompt, [], userLanguage);
+    log(`gemini connected (lang=${userLanguage})`);
 
     player = new AudioPlayer();
     player.init();
@@ -154,8 +174,12 @@ async function activate() {
     log('mic active');
 
     setTimeout(() => {
+      // Tell the framework which language to respond in BEFORE the
+      // start signal — otherwise the opening greeting can land in
+      // the wrong language.
+      gemini?.sendText(`[CMD:lang:${langBase}]`);
       gemini?.sendText('[CMD:start]');
-      log('-> [CMD:start]');
+      log(`-> [CMD:lang:${langBase}] [CMD:start]`);
     }, 300);
 
     // Deduct one credit on successful start. Fire-and-forget — the chip
