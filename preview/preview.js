@@ -7,6 +7,7 @@ import { MicCapture, AudioPlayer, arrayBufToBase64 } from '/playground/audio.js'
 import { FRAMEWORKS, assemblePrompt } from '/playground/frameworks.js';
 import { SessionConductor } from '/playground/conductor.js';
 import { PresenceHistory } from '/playground/presence.js';
+import { EmotionConnection } from '/playground/emotion.js';
 import * as billing from '/playground/billing.js';
 
 const log = (msg) => console.log(`[preview] ${msg}`);
@@ -57,6 +58,7 @@ let reflectionRevealTimer = null;
 let _historyPushed = false;
 let conductor = null;
 let presenceHistory = null;
+let emotion = null;  // EmotionConnection — closed in teardownVoice
 let lastUserText = '';
 let lastModelText = '';
 // Latest single-sentence observation from /analyze. Surfaced in the
@@ -67,6 +69,8 @@ let sessionStartedAt = 0;
 // Remembered between sessions so "Start another" re-enters the same
 // character. Falls back to coaching on first run.
 let _lastFrameworkId = 'coaching';
+// Throttle emotion logs — only print when the label changes
+let _lastEmotionLabel = null;
 
 // Idle preset: low energy + low engagement keep the orb's drift slow and
 // meditative. The hero shouldn't feel like a busy screensaver while users
@@ -216,7 +220,27 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
 
     player = new AudioPlayer();
     player.init();
-    mic = new MicCapture((buf) => gemini.sendAudio(arrayBufToBase64(buf)));
+
+    // Realtime emotion stream — 16kHz int16 PCM piped to the Modal SER
+    // service; predictions arrive at ~2/sec and tint the orb via Plutchik
+    // hue. Mic provides the 16k chunk callback; emotion stream is fully
+    // optional — failures here NEVER block the audio path to Gemini.
+    emotion = new EmotionConnection();
+    emotion.onEmotion = (data) => {
+      avatar.setEmotion(data.emotion, data.intensity);
+      // Optional: log only when label changes to avoid noise
+      if (data.emotion !== _lastEmotionLabel) {
+        _lastEmotionLabel = data.emotion;
+        log(`emotion: ${data.emotion} (${data.intensity.toFixed(2)})`);
+      }
+    };
+    emotion.onError = (err) => log(`emotion ws error: ${err?.message || err}`);
+    emotion.connect();
+
+    mic = new MicCapture(
+      (buf) => gemini.sendAudio(arrayBufToBase64(buf)),
+      (buf16k) => emotion?.sendPcm(buf16k),
+    );
     await mic.start();
     log('mic active');
 
@@ -248,6 +272,11 @@ function teardownVoice() {
   mic?.stop(); mic = null;
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
+  emotion?.close(); emotion = null;
+  // Fade the orb back to a neutral hue so the next session doesn't open
+  // tinted by the prior session's last emotion read.
+  avatar.setEmotion('neutral', 0, 600);
+  _lastEmotionLabel = null;
   conductor = null;
   presenceHistory = null;
 }

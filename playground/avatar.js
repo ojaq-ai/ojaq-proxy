@@ -42,6 +42,23 @@ const MODE_CONFIG = {
   sit:       { speedMul: 0.4, cohesionMul: 1.2, brightMul: 0.5 },
 };
 
+// Plutchik 8-class → orb hue map. Hues sit roughly on the wheel:
+// joy (yellow) → trust (green-yellow) → fear (green) → surprise (cyan) →
+// sadness (blue) → disgust (purple) → anger (red) → anticipation (orange).
+// neutral = null falls back to sentiment-based hue (no override).
+const PLUTCHIK_HUES = {
+  joy:           50,   // warm yellow
+  trust:         100,  // light green
+  fear:          140,  // dark green
+  surprise:      190,  // cyan
+  sadness:       220,  // blue
+  disgust:       285,  // purple
+  anger:         0,    // red
+  anticipation:  30,   // orange
+  neutral:       null, // no override
+};
+const EMOTION_SAT = 55;  // how saturated emotion-tinted orbs are
+
 class Orb {
   constructor(cx, cy, scale) {
     const s = scale || 1;
@@ -84,15 +101,26 @@ class Orb {
     this._speakerHue = params.speakerHue || 0;
     this._speakerSat = params.speakerSat || 0;
     this._speakerStrength = params.speakerStrength || 0;
+    this._emotionHue = params.emotionHue || 0;
+    this._emotionSat = params.emotionSat || 0;
+    this._emotionStrength = params.emotionStrength || 0;
     this._birthOpacity = params.birthOpacity ?? 1;
   }
 
   draw(ctx, t) {
     const r = this._r * (1 + Math.sin(t * 2 + this.phase) * 0.15);
+    // Hue stack — three layers, applied in order:
+    //   1) sentiment-based baseline (cold blue ↔ warm orange from /analyze)
+    //   2) emotion-based override (Plutchik hue from realtime SER stream)
+    //   3) speaker-based tint (multi-speaker: one hue per voice)
+    // Each layer's strength gates the lerp; with all strengths at 0 we
+    // fall back to the sentiment baseline (existing behavior preserved).
     const sentimentHue = this._warmth * 40 + (1 - this._warmth) * 240;
     const sentimentSat = 35 + this._warmth * 25;
-    const hue = shortArcHueLerp(sentimentHue, this._speakerHue, this._speakerStrength);
-    const sat = lerp(sentimentSat, this._speakerSat, this._speakerStrength);
+    let hue = shortArcHueLerp(sentimentHue, this._emotionHue, this._emotionStrength);
+    let sat = lerp(sentimentSat, this._emotionSat, this._emotionStrength);
+    hue = shortArcHueLerp(hue, this._speakerHue, this._speakerStrength);
+    sat = lerp(sat, this._speakerSat, this._speakerStrength);
     const alpha = (0.2 + this._brightness * 0.5) * this._birthOpacity;  // always visible, brighter with engagement; faded during birth
 
     // Glow
@@ -139,6 +167,11 @@ export class Avatar {
     this.speakerSat = 0;
     this.speakerStrength = 0;
     this._colorTween = null;
+    // Emotion-driven hue (independent channel from speaker color).
+    this.emotionHue = 0;
+    this.emotionSat = 0;
+    this.emotionStrength = 0;
+    this._emotionTween = null;
     // Frame-count fade-in for a meditative entrance (~1.5s @ 60fps).
     // Prevents the first second from feeling like the orbs are crashing into existence.
     this._birthFrames = 0;
@@ -167,6 +200,35 @@ export class Avatar {
   setPresence(p) { this.target = { ...p }; this._settling = false; }
   setMode(m) { this.mode = m; }
   setDepth(d) { this.depth = d; }
+
+  /** Tint the orb toward a Plutchik emotion. Updates from the realtime
+   *  SER stream — strength scales with intensity (0.5 floor so even soft
+   *  reads register, capped at 0.85 so emotion doesn't fully obliterate
+   *  speaker tint when both are active). emotion='neutral' (or unknown)
+   *  fades strength to 0 and the orb falls back to sentiment baseline. */
+  setEmotion(emotion, intensity = 0.5, fadeMs = 700) {
+    const targetHue = PLUTCHIK_HUES[emotion];
+    const fromHue = this.emotionHue;
+    const fromSat = this.emotionSat;
+    const fromStrength = this.emotionStrength;
+    let toHue, toSat, toStrength;
+    if (targetHue == null) {
+      // neutral / unknown — fade out, hold last hue so transition is smooth
+      toHue = fromHue;
+      toSat = fromSat;
+      toStrength = 0;
+    } else {
+      toHue = targetHue;
+      toSat = EMOTION_SAT;
+      toStrength = Math.max(0.5, Math.min(0.85, 0.5 + (intensity || 0) * 0.4));
+    }
+    this._emotionTween = {
+      fromHue, fromSat, fromStrength,
+      toHue, toSat, toStrength,
+      start: performance.now(),
+      duration: fadeMs,
+    };
+  }
 
   /** Tint the orb toward a speaker-specific color. hex=null clears the tint.
    *  Sentiment stays the primary signal (strength maxes at 0.5). */
@@ -247,6 +309,17 @@ export class Avatar {
       if (t >= 1) this._colorTween = null;
     }
 
+    // Emotion color tween — same shape, independent channel
+    if (this._emotionTween) {
+      const et = this._emotionTween;
+      const t = Math.min(1, (performance.now() - et.start) / et.duration);
+      const ease = 1 - Math.pow(1 - t, 3);
+      this.emotionHue      = shortArcHueLerp(et.fromHue, et.toHue, ease);
+      this.emotionSat      = lerp(et.fromSat, et.toSat, ease);
+      this.emotionStrength = lerp(et.fromStrength, et.toStrength, ease);
+      if (t >= 1) this._emotionTween = null;
+    }
+
     const { energy, confidence, resistance, engagement, congruence, sentiment } = this.current;
     const mc = MODE_CONFIG[this.mode] || MODE_CONFIG.reflect;
 
@@ -266,6 +339,9 @@ export class Avatar {
       speakerHue:      this.speakerHue,
       speakerSat:      this.speakerSat,
       speakerStrength: this.speakerStrength,
+      emotionHue:      this.emotionHue,
+      emotionSat:      this.emotionSat,
+      emotionStrength: this.emotionStrength,
       birthOpacity,
     };
 
