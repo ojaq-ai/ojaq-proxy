@@ -10,6 +10,7 @@ let _suppressed = false; // true while a session is running — chip hidden
 // ── DOM handles (resolved on init) ──────────────────────────────────────
 let $chip, $btn, $label, $menu, $menuEmail, $menuCredits, $signout;
 let $modal, $email, $submit, $note, $form, $sent, $sentMsg, $close;
+let $paywall, $paywallLoginCta, $paywallLoginLink, $paywallClose, $paywallPkgs;
 
 // ── /me fetch ──────────────────────────────────────────────────────────
 async function fetchMe() {
@@ -127,6 +128,75 @@ async function onSubmitEmail() {
   }
 }
 
+// ── Paywall ────────────────────────────────────────────────────────────
+export function showPaywall({ allowLogin = false } = {}) {
+  if (!$paywall) return;
+  $paywallLoginCta.style.display = allowLogin ? '' : 'none';
+  Array.from($paywallPkgs).forEach((b) => { b.disabled = false; });
+  $paywall.style.display = 'flex';
+}
+
+export function hidePaywall() {
+  if (!$paywall) return;
+  $paywall.style.display = 'none';
+}
+
+async function onPackageClick(packageId) {
+  // Unauthed user must sign in before checkout — checkout requires a logged-in email
+  if (!_state) {
+    hidePaywall();
+    showLoginModal();
+    return;
+  }
+  // Disable all package buttons while we await the redirect
+  Array.from($paywallPkgs).forEach((b) => { b.disabled = true; });
+  try {
+    const r = await fetch('/stripe/checkout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ package: packageId }),
+    });
+    if (!r.ok) {
+      log(`/stripe/checkout failed status=${r.status}`);
+      Array.from($paywallPkgs).forEach((b) => { b.disabled = false; });
+      return;
+    }
+    const d = await r.json();
+    if (d.url) {
+      window.location = d.url; // redirect to Stripe Checkout
+    } else {
+      log(`/stripe/checkout returned no url: ${JSON.stringify(d)}`);
+      Array.from($paywallPkgs).forEach((b) => { b.disabled = false; });
+    }
+  } catch (e) {
+    log(`/stripe/checkout error: ${e.message}`);
+    Array.from($paywallPkgs).forEach((b) => { b.disabled = false; });
+  }
+}
+
+// ── Credit deduction (called fire-and-forget after session start) ───────
+export async function deductCredit() {
+  // Only meaningful if we have a session (cookie). Unauthed users skip the call.
+  if (!_state) return;
+  try {
+    const r = await fetch('/wallet/deduct', { method: 'POST', credentials: 'same-origin' });
+    if (r.status === 401) return;
+    const d = await r.json();
+    if (d.ok) {
+      // Optimistic local update so the chip reflects the new balance immediately
+      _state.credits = d.credits;
+      _state.plan = d.plan ?? _state.plan;
+      _state.evergreenActive = !!d.evergreenActive;
+      renderChip();
+    } else if (d.reason) {
+      log(`deduct returned not-ok: ${d.reason}`);
+    }
+  } catch (e) {
+    log(`deduct silent failure: ${e.message}`);
+  }
+}
+
 // ── Public: hide chip during a live session, restore on stop ────────────
 export function setSessionActive(active) {
   _suppressed = !!active;
@@ -162,6 +232,11 @@ export async function init() {
   $sent = document.getElementById('login-sent');
   $sentMsg = document.getElementById('login-sent-msg');
   $close = document.getElementById('login-close');
+  $paywall = document.getElementById('paywall-modal');
+  $paywallLoginCta = document.getElementById('paywall-login-cta');
+  $paywallLoginLink = document.getElementById('paywall-login-link');
+  $paywallClose = document.getElementById('paywall-close');
+  $paywallPkgs = document.querySelectorAll('.paywall-pkg');
 
   // Wire events
   $btn.addEventListener('click', onChipClick);
@@ -172,15 +247,30 @@ export async function init() {
     if (e.key === 'Enter') { e.preventDefault(); onSubmitEmail(); }
   });
   $close.addEventListener('click', hideLoginModal);
+  Array.from($paywallPkgs).forEach((b) => {
+    b.addEventListener('click', () => onPackageClick(b.dataset.package));
+  });
+  $paywallLoginLink.addEventListener('click', () => {
+    hidePaywall();
+    showLoginModal();
+  });
+  $paywallClose.addEventListener('click', hidePaywall);
 
-  // Strip ?welcome=1 from URL after a fresh verify, keep other params
+  // Strip ?welcome=1 / ?purchase=success|cancel from URL
   const params = new URLSearchParams(location.search);
-  if (params.has('welcome')) {
-    params.delete('welcome');
+  let stripped = false;
+  if (params.has('welcome')) { params.delete('welcome'); stripped = true; }
+  const purchase = params.get('purchase');
+  if (purchase) { params.delete('purchase'); stripped = true; }
+  if (stripped) {
     const qs = params.toString();
     history.replaceState(null, '', `${location.pathname}${qs ? '?' + qs : ''}${location.hash}`);
   }
 
   // Initial state
   await refresh();
+
+  // After Stripe checkout success, the wallet was credited via webhook before
+  // the redirect — refresh() above already fetched the new balance.
+  if (purchase === 'success') log('purchase completed, chip refreshed');
 }

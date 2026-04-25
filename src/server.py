@@ -223,20 +223,37 @@ async def session_status(request: Request):
 
 @app.post("/session/start")
 async def session_start(request: Request):
-    ip = _get_client_ip(request)
-    if not _check_rate(ip):
-        return JSONResponse(
-            {"error": "rate_limited",
-             "message": "You've used your previews for today."},
-            status_code=429,
-        )
-    _record_rate(ip)
+    # Authed users with credits/evergreen bypass the IP rate limit.
+    # Authed users with NO credits → 402 paywall.
+    # Unauthed users fall through to the existing IP rate limit (free tier).
+    from auth import get_current_user_optional
+    from wallet import get_summary
+
+    email = get_current_user_optional(request)
+    if email:
+        summary = get_summary(email)
+        if not (summary.get("evergreenActive") or (summary.get("credits") or 0) > 0):
+            return JSONResponse(
+                {"error": "no_credits", "paywall": True},
+                status_code=402,
+            )
+        # Authed-with-credits → skip IP rate limit
+    else:
+        ip = _get_client_ip(request)
+        if not _check_rate(ip):
+            return JSONResponse(
+                {"error": "rate_limited",
+                 "message": "You've used your previews for today."},
+                status_code=429,
+            )
+        _record_rate(ip)
 
     body = await request.json()
     entry = {
         "event": "start",
         "session_id": str(uuid.uuid4())[:8],
         "framework": body.get("framework", "unknown"),
+        "email": email or None,  # null for unauthed sessions; useful for analytics
         "timestamp": datetime.datetime.utcnow().isoformat(),
     }
     with open(SESSIONS_LOG, "a") as f:
