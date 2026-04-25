@@ -202,10 +202,13 @@ export class Avatar {
   setDepth(d) { this.depth = d; }
 
   /** Tint the orb toward a Plutchik emotion. Updates from the realtime
-   *  SER stream — strength scales with intensity (0.5 floor so even soft
-   *  reads register, capped at 0.85 so emotion doesn't fully obliterate
-   *  speaker tint when both are active). emotion='neutral' (or unknown)
-   *  fades strength to 0 and the orb falls back to sentiment baseline. */
+   *  SER stream — strength scales LINEARLY with Hume confidence so weak
+   *  reads (0.20-0.30) barely tint, strong reads (0.50+) tint decisively.
+   *  Hume top-emotion scores are 1-of-48 probabilities, so 0.50 IS a
+   *  dominant signal — calibration matches Hume's distribution rather
+   *  than a uniform 0..1.
+   *  emotion='neutral' (or unknown) fades strength to 0 and the orb
+   *  falls back to sentiment baseline. */
   setEmotion(emotion, intensity = 0.5, fadeMs = 700) {
     const targetHue = PLUTCHIK_HUES[emotion];
     const fromHue = this.emotionHue;
@@ -220,7 +223,8 @@ export class Avatar {
     } else {
       toHue = targetHue;
       toSat = EMOTION_SAT;
-      toStrength = Math.max(0.5, Math.min(0.85, 0.5 + (intensity || 0) * 0.4));
+      // 0.20 → 0.25, 0.40 → 0.50, 0.60 → 0.70, 0.85+ → 0.85
+      toStrength = Math.max(0.20, Math.min(0.85, (intensity || 0) * 1.1 + 0.05));
     }
     this._emotionTween = {
       fromHue, fromSat, fromStrength,

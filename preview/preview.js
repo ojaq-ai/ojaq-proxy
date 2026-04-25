@@ -228,11 +228,11 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     emotion = new EmotionConnection();
     emotion.onEmotion = (data) => {
       avatar.setEmotion(data.emotion, data.intensity);
-      // Optional: log only when label changes to avoid noise
-      if (data.emotion !== _lastEmotionLabel) {
-        _lastEmotionLabel = data.emotion;
-        log(`emotion: ${data.emotion} (${data.intensity.toFixed(2)})`);
-      }
+      // Log every emotion event so frequency is visible. The orb tween
+      // smooths the visual side; the log is purely diagnostic and can
+      // be re-throttled later if it gets noisy.
+      const raw = data.raw_emotion ? ` <- ${data.raw_emotion}` : '';
+      log(`emotion: ${data.emotion} (${data.intensity.toFixed(2)})${raw}`);
     };
     emotion.onError = (err) => log(`emotion ws error: ${err?.message || err}`);
     emotion.connect();

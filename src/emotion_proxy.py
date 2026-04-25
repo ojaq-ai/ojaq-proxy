@@ -49,10 +49,13 @@ WINDOW_SECONDS = 3              # Hume processes ~3s windows well; trade-off
 WINDOW_BYTES = SAMPLE_RATE * 2 * WINDOW_SECONDS
 
 # Below this confidence on the top emotion we suppress the message —
-# the orb stays at the sentiment baseline rather than flickering on
-# weak reads. From the empirical test, 0.30 cleanly separates honest
-# emotion signal from "this is calm narrative".
-INTENSITY_GATE = 0.30
+# the orb stays at sentiment baseline rather than flickering on weak
+# reads. Lowered from 0.30 to 0.20 after observing that calm Turkish
+# narrative speech routinely lands at 0.13-0.30 and the orb received
+# almost no updates. With 0.20 + the avatar's intensity-scaled tween
+# strength, low-confidence reads tint subtly while strong reads still
+# drive the orb decisively.
+INTENSITY_GATE = 0.20
 
 # Hume's 48 emotion catalog → Plutchik 8. "neutral" reserved for
 # weak/unclear reads (Boredom/Tiredness/Confusion). Calmness mapped
