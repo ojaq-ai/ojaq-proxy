@@ -155,7 +155,10 @@ async function onPackageClick(packageId) {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ package: packageId }),
+      // Pass the current path so Stripe's success/cancel URLs land back
+      // on the surface the buyer came from. Server whitelists this
+      // (/playground/, /preview/) and falls back to /playground/ otherwise.
+      body: JSON.stringify({ package: packageId, return_path: location.pathname }),
     });
     if (!r.ok) {
       log(`/stripe/checkout failed status=${r.status}`);

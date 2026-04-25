@@ -87,14 +87,48 @@ async function activate() {
   // Allow Begin click during a lingering reflection to skip straight into a new session
   if (state === 'reflecting') resetReflection();
 
-  // Pre-flight credit check — authed users with no credits and no
-  // evergreen subscription get the paywall before we tear down the
-  // landing chrome. Same gate the production playground uses.
+  // ── Pre-flight: client-side credit gate ─────────────────────────────
+  // Authed users with no credits + no evergreen get the paywall before
+  // any network round-trip. /session/start would catch this server-side
+  // too, but failing fast saves a request and feels snappier.
   const userState = billing.getState();
   if (userState && !userState.evergreenActive && (userState.credits ?? 0) <= 0) {
     log('pre-flight: authed but no credits — showing paywall');
     billing.showPaywall({ allowLogin: false });
     return;
+  }
+
+  // ── Server-side gate: /session/start ────────────────────────────────
+  // Enforces IP-based rate limit for unauthed users (free tier) AND
+  // re-checks credits for authed users (defense against stale client
+  // state). Called BEFORE the visual transition so a paywall surface
+  // never leaves the landing page in a half-torn-down limbo.
+  let sessionId = null;
+  try {
+    const r = await fetch('/session/start', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ framework: 'coaching' }),
+    });
+    if (r.status === 429) {
+      log('rate limited (unauthed) — paywall with login');
+      billing.showPaywall({ allowLogin: true });
+      return;
+    }
+    if (r.status === 402) {
+      log('no credits (authed) — paywall');
+      billing.showPaywall({ allowLogin: false });
+      return;
+    }
+    if (r.ok) {
+      const d = await r.json();
+      sessionId = d.session_id;
+      log(`session_id=${sessionId}`);
+    }
+  } catch {
+    // Network blip on /session/start shouldn't block the user from
+    // their session — analytics is best-effort, not a hard gate.
   }
 
   state = 'active';
@@ -189,12 +223,6 @@ async function activate() {
     billing.deductCredit().catch(() => {});
   } catch (err) {
     log(`activate failed: ${err.message}`);
-    // /token returns 402 once IP-level rate limit hits for unauthed users
-    // (or after server-side wallet check fails for authed). Surface the
-    // paywall so they have an obvious next step.
-    if (/402/.test(err.message || '')) {
-      billing.showPaywall({ allowLogin: !userState });
-    }
     state = 'idle';
     setBodyState('idle');
     billing.setSessionActive(false);
