@@ -112,6 +112,15 @@ async function activate() {
 
     gemini = new GeminiConnection();
     gemini.onAudio = (b64) => player?.play(b64);
+    // Barge-in: when Gemini detects the user starting to speak mid-reply
+    // it sends an interrupted signal. Flushing the audio queue immediately
+    // is what makes the AI actually stop talking — without this, queued
+    // chunks keep playing and the user feels unheard.
+    gemini.onInterrupted = () => {
+      player?.clear();
+      lastModelText = '';
+      $tModel.textContent = '';
+    };
     gemini.onInputTranscript = (t) => {
       lastUserText += t;
       $tUser.textContent = lastUserText;
