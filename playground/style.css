@@ -757,10 +757,10 @@ main {
   /* Signal text shorter on mobile */
   #signal { max-width: 280px; font-size: 10px; }
 
-  /* Tabs — mobile shows only the flagship frameworks (Coaching + Together + Meet) */
+  /* Tabs — mobile shows only the flagship frameworks (Coaching + Together + Friend) */
   nav#tabs { justify-content: center; padding: 6px 8px; gap: 6px; }
   nav#tabs button { font-size: 10px; padding: 5px 12px; }
-  nav#tabs button:not([data-framework="coaching"]):not([data-framework="together"]):not([data-framework="meet"]) {
+  nav#tabs button:not([data-framework="coaching"]):not([data-framework="together"]):not([data-framework="friend"]) {
     display: none;
   }
 

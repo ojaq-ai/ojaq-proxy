@@ -148,9 +148,17 @@ function syncUrl() {
 }
 
 // ── framework tabs ──────────────────────────────────────────────────────
+// Hidden from tab UI but kept defined in FRAMEWORKS for URL backwards-compat —
+// /playground/?framework=therapy or ?framework=meet still loads, just with no
+// visible tab to switch back to.
+//   - therapy (Reflection): cut to tighten the character set; overlapped Self-Discovery
+//   - meet (Ojaq Meet): paused due to instability
+const HIDDEN_TAB_FRAMEWORKS = new Set(['therapy', 'meet']);
+
 function renderTabs() {
   $tabs.innerHTML = '';
   for (const fw of Object.values(FRAMEWORKS)) {
+    if (HIDDEN_TAB_FRAMEWORKS.has(fw.id)) continue;
     const btn = document.createElement('button');
     btn.textContent = fw.name;
     btn.dataset.framework = fw.id;
