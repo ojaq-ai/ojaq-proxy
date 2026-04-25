@@ -500,6 +500,12 @@ async def playground_manifest():
 
 app.mount("/playground", StaticFiles(directory=PLAYGROUND, html=True), name="playground")
 
+# Single-page preview prototype — landing + playground in one DOM context.
+# Production routes (/ and /playground/) untouched; /preview is a sandbox.
+PREVIEW = _ROOT / "preview"
+if PREVIEW.is_dir():
+    app.mount("/preview", StaticFiles(directory=PREVIEW, html=True), name="preview")
+
 
 if __name__ == "__main__":
     import uvicorn
