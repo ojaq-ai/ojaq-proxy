@@ -57,19 +57,17 @@ body {
   text-align: center;
 }
 
-/* Orb is fixed to the viewport (not the hero) so it's truly centered on the
-   page regardless of nav height, and stays as atmospheric backdrop while
-   the user scrolls through editorial. In session-active/reflecting, blur +
-   dim lift and orb sharpens — without ever moving. */
+/* Orb canvas fills the entire viewport. Earlier square version left visible
+   margins on the page edges and clipped orbs whose orbital radius reached
+   past the canvas — most noticeable on mobile. Fullscreen canvas gives
+   the orbs unbounded space and the hero feels framed by atmosphere rather
+   than by a 720px window inside it.
+   In session-active/reflecting, opacity + blur clear and the orb sharpens. */
 .orb-backdrop {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(85vmin, 720px);
-  height: min(85vmin, 720px);
+  inset: 0;
   z-index: 0;
-  opacity: 0.5;
+  opacity: 0.4;
   filter: blur(3px);
   pointer-events: none;
   transition: opacity 700ms ease, filter 700ms ease;
@@ -79,6 +77,20 @@ body {
   display: block;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* When the user scrolls past the hero, the orb fades to near-invisible.
+   It's always behind the page (position:fixed) but shouldn't compete with
+   editorial reading. Restored to full presence on session start. */
+body.hero-out-of-view .orb-backdrop {
+  opacity: 0.06;
+}
+
+/* Session states override scroll-based fade — orb is THE focus there. */
+body.session-active .orb-backdrop,
+body.session-reflecting .orb-backdrop {
+  opacity: 1 !important;
+  filter: none;
 }
 
 .hero-content {
@@ -111,29 +123,27 @@ body {
   margin-bottom: 48px;
 }
 
-/* Primary CTA — matches the .cta button style on production landing.
-   Solid pill, immediate (no fade delay) so users can act the moment the
-   page paints. */
+/* Primary CTA — ghost pattern, restrained. The orb is the focal point;
+   the button is a quiet invitation, not a billboard. */
 .begin-btn {
   font-family: inherit;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 2px;
+  letter-spacing: 2.5px;
   text-transform: uppercase;
-  padding: 16px 48px;
-  border: none;
-  border-radius: 60px;
-  background: var(--text);
-  color: var(--bg);
+  padding: 12px 32px;
+  border-radius: 40px;
+  border: 1px solid rgba(184, 160, 255, 0.4);
+  background: transparent;
+  color: var(--text);
   cursor: pointer;
-  text-decoration: none;
-  transition: all 0.3s ease;
+  transition: background 220ms ease, border-color 220ms ease, transform 220ms ease;
 }
 
 .begin-btn:hover {
-  background: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(184, 160, 255, 0.2);
+  background: rgba(184, 160, 255, 0.1);
+  border-color: var(--accent);
+  transform: translateY(-1px);
 }
 
 /* ── End session button (only visible while session active) ───────────── */
@@ -195,12 +205,6 @@ body.session-reflecting footer {
   transition: opacity 400ms ease, visibility 0s linear 400ms;
 }
 
-body.session-active .orb-backdrop,
-body.session-reflecting .orb-backdrop {
-  opacity: 1;
-  filter: none;
-}
-
 body.session-active .end-btn {
   opacity: 1;
   pointer-events: auto;
@@ -246,7 +250,9 @@ body.session-active #transcripts {
 
 .t-line:last-child { margin-bottom: 0; }
 
-.t-line.you { color: rgba(232, 232, 240, 0.55); }
+/* User line is captured for /analyze + conductor but not surfaced —
+   only Ojaq's voice is shown. The user's words are theirs to remember. */
+.t-line.you { display: none; }
 .t-line.ojaq { color: var(--accent); opacity: 0.85; }
 
 .reflection {
@@ -329,8 +335,17 @@ body.reflection-visible .reflection {
 
 .reflect-actions {
   display: flex;
-  gap: 24px;
+  gap: 14px;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.reflect-divider {
+  font-size: 13px;
+  color: var(--muted);
+  opacity: 0.4;
+  user-select: none;
 }
 
 .reflect-tertiary {
@@ -343,13 +358,16 @@ body.reflection-visible .reflection {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px 8px;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  transition: color 200ms ease;
+  padding: 6px 10px;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 200ms ease, border-color 200ms ease;
 }
 
-.reflect-tertiary:hover { color: var(--text); }
+.reflect-tertiary:hover {
+  color: var(--text);
+  border-bottom-color: rgba(184, 160, 255, 0.4);
+}
 
 /* ── editorial sections (matches production landing dims) ────────────── */
 .editorial {
@@ -855,4 +873,6 @@ footer a:hover { color: var(--muted); }
   #transcripts { bottom: 110px; }
   #paywall-packages { flex-direction: column; align-items: stretch; }
   .paywall-pkg { max-width: none; }
+  .reflect-actions { flex-direction: column; gap: 6px; }
+  .reflect-divider { display: none; }
 }

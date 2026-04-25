@@ -14,6 +14,9 @@ const log = (msg) => console.log(`[preview] ${msg}`);
 // Mount the orb canvas in idle (passive drift) mode.
 const canvas = document.getElementById('orb-canvas');
 const avatar = new Avatar(canvas);
+// 'hold' mode further slows the drift — combined with the low-energy idle
+// preset below, the orb settles into a meditative breath.
+avatar.setMode('hold');
 
 // ── Session state machine ────────────────────────────────────────────────
 //   idle ↔ active → reflecting → idle  (reflecting → active via "Start another")
@@ -37,7 +40,10 @@ let presenceHistory = null;
 let lastUserText = '';
 let lastModelText = '';
 
-const IDLE_PRESENCE = { energy: 30, confidence: 50, resistance: 5, engagement: 40, congruence: 60, sentiment: 0.1 };
+// Idle preset: low energy + low engagement keep the orb's drift slow and
+// meditative. The hero shouldn't feel like a busy screensaver while users
+// read. Conductor takes over speed/depth once a session activates.
+const IDLE_PRESENCE = { energy: 12, confidence: 50, resistance: 5, engagement: 25, congruence: 60, sentiment: 0.1 };
 
 function setBodyState(target) {
   document.body.classList.remove('session-active', 'session-reflecting', 'reflection-visible');
@@ -182,6 +188,8 @@ function dismissReflection() {
   setBodyState('idle');
   billing.setSessionActive(false);   // chip returns
   avatar.setPresence(IDLE_PRESENCE); // restore idle target so orbs resume natural drift
+  avatar.setMode('hold');            // back to slow meditative drift
+  avatar.setDepth(0);                // clear any depth the conductor accumulated
   resetReflection();
   // Clean slate — land at the top of the page on return
   window.scrollTo(0, 0);
@@ -290,5 +298,17 @@ $waitlistForm?.addEventListener('submit', async (e) => {
 
 // ── Auth chip + login modal — reuses /playground/billing.js verbatim ───
 billing.init().catch((e) => log(`billing init failed: ${e.message}`));
+
+// Fade the orb backdrop to near-invisible once the user scrolls past the
+// hero. Avoids competing with editorial reading; restored via CSS
+// session-active rule when a session starts (where the orb IS the focus).
+const heroEl = document.querySelector('.hero');
+if (heroEl && 'IntersectionObserver' in window) {
+  new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      document.body.classList.toggle('hero-out-of-view', !entry.isIntersecting);
+    }
+  }, { threshold: 0.15 }).observe(heroEl);
+}
 
 log('preview ready');
