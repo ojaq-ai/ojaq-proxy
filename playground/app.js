@@ -7,6 +7,7 @@ import { SortformerConnection } from './sortformer.js';
 import { Avatar } from './avatar.js';
 import { SessionConductor } from './conductor.js';
 import { mapEmotion, PresenceHistory } from './presence.js';
+import * as billing from './billing.js';
 
 // ── DOM ─────────────────────────────────────────────────────────────────
 const $tabs       = document.getElementById('tabs');
@@ -435,6 +436,7 @@ async function start() {
     // go
     running = true;
     turnCount = 0;
+    billing.setSessionActive(true); // hide account chip during the session
     await requestWakeLock();
     $btnIcon.innerHTML = '&#9632;';
     $btnText.textContent = 'End Session';
@@ -506,6 +508,7 @@ function stop() {
   sessionId = null;
   turnCount = 0;
   running = false;
+  billing.setSessionActive(false); // restore account chip after the session
   mic?.stop(); mic = null;
   player?.stop(); player = null;
   gemini?.close(); gemini = null;
@@ -794,5 +797,8 @@ function showNormalUI() {
     showNormalUI();
   }
 })();
+
+// Founding Members auth UI — fetches /me, renders account chip, owns login modal
+billing.init();
 
 log('playground ready');

@@ -16,6 +16,35 @@
 </head>
 <body>
 
+<!-- ── account chip (top-right, hidden during sessions) ── -->
+<div id="account-chip" class="hidden">
+  <button type="button" id="account-btn"><span id="account-label">Sign in</span></button>
+  <div id="account-menu">
+    <p id="account-menu-email"></p>
+    <p id="account-menu-credits"></p>
+    <button type="button" id="account-signout">Sign out</button>
+  </div>
+</div>
+
+<!-- ── login modal (hidden until "Sign in" clicked) ── -->
+<div id="login-modal" style="display:none">
+  <div id="login-inner">
+    <p id="login-title">Continue with Ojaq</p>
+    <p id="login-sub">We'll email you a link.</p>
+    <div id="login-form">
+      <div class="reflect-input-row">
+        <input type="email" id="login-email" placeholder="your@email.com">
+        <button type="button" id="login-submit" class="reflect-submit">Send link</button>
+      </div>
+      <p id="login-note"></p>
+    </div>
+    <div id="login-sent" style="display:none">
+      <p id="login-sent-msg">Check your email.</p>
+    </div>
+    <button type="button" id="login-close">Close</button>
+  </div>
+</div>
+
 <!-- ── framework tabs ── -->
 <nav id="tabs"></nav>
 
