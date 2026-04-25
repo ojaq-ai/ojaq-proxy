@@ -211,14 +211,14 @@ async def me(request: Request):
     email = get_current_user_optional(request)
     if not email:
         return JSONResponse({"error": "unauthorized"}, 401)
-    # Wallet/credits arrive in commit 3. Response shape is stable from day one
-    # so the frontend can rely on these keys.
-    return {
-        "email": email,
-        "credits": 0,
-        "plan": None,
-        "evergreenActive": False,
-    }
+    # Lazy import — wallet module imports auth, so a top-level import here would loop.
+    try:
+        from wallet import get_summary
+        summary = get_summary(email)
+    except Exception:
+        logger.exception("wallet summary failed for %s", email)
+        summary = {"credits": 0, "plan": None, "evergreenActive": False}
+    return {"email": email, **summary}
 
 
 @router.post("/auth/logout")

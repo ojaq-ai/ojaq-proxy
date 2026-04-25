@@ -95,6 +95,11 @@ from auth import router as auth_router, init_auth
 init_auth(auth_dir=AUTH_DIR, app_url=APP_URL, cookie_domain=COOKIE_DOMAIN)
 app.include_router(auth_router)
 
+# Founding Members wallet — credit balance + per-session deduct
+from wallet import router as wallet_router, init_wallet
+init_wallet(wallet_dir=WALLET_DIR)
+app.include_router(wallet_router)
+
 
 # ── Rate limiting (in-memory only, never persisted) ──────────────────────
 _rate_map = {}  # ip -> [timestamp, ...]
