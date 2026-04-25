@@ -5,6 +5,7 @@ import { Avatar } from '/playground/avatar.js';
 import { GeminiConnection } from '/playground/gemini.js';
 import { MicCapture, AudioPlayer, arrayBufToBase64 } from '/playground/audio.js';
 import { FRAMEWORKS, assemblePrompt } from '/playground/frameworks.js';
+import * as billing from '/playground/billing.js';
 
 const log = (msg) => console.log(`[preview] ${msg}`);
 
@@ -34,6 +35,7 @@ async function activate() {
   if (state === 'reflecting') resetReflection();
   state = 'active';
   setBodyState('active');
+  billing.setSessionActive(true);
   log('session activating…');
 
   try {
@@ -65,6 +67,7 @@ async function activate() {
     log(`activate failed: ${err.message}`);
     state = 'idle';
     setBodyState('idle');
+    billing.setSessionActive(false);
     teardownVoice();
   }
 }
@@ -80,6 +83,7 @@ function endSession() {
   state = 'reflecting';
   teardownVoice();
   setBodyState('reflecting');
+  billing.setSessionActive(false);
   avatar.settleToRest(2500);
   resetReflection();
   log('reflection began (2s hold)');
@@ -180,5 +184,8 @@ $waitlistForm?.addEventListener('submit', async (e) => {
     $waitlistNote.textContent = 'Network error. Try again.';
   }
 });
+
+// ── Auth chip + login modal — reuses /playground/billing.js verbatim ───
+billing.init().catch((e) => log(`billing init failed: ${e.message}`));
 
 log('preview ready');
