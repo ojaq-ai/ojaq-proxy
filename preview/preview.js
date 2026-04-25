@@ -198,8 +198,11 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     };
     gemini.onOutputTranscript = (t) => {
       lastModelText += t;
-      // Strip any leaked [CMD:*] markers before display and before /analyze sees them
-      lastModelText = lastModelText.replace(/\[CMD:[^\]]*\]/g, '').trim();
+      // Strip any leaked structured marker — [CMD:...], [PROSODY_REPORT:...],
+      // any future [XXX:...] — before display + before /analyze sees them.
+      // Models occasionally echo system markers verbatim; don't let that
+      // surface in the transcript or leak into downstream analysis.
+      lastModelText = lastModelText.replace(/\[[A-Z_]+:[^\]]*\]/g, '').trim();
       $tModel.textContent = lastModelText;
     };
     gemini.onTurnComplete = () => {
