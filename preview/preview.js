@@ -64,6 +64,9 @@ let lastModelText = '';
 // session call — just the model's most recent honest read).
 let lastSignal = '';
 let sessionStartedAt = 0;
+// Remembered between sessions so "Start another" re-enters the same
+// character. Falls back to coaching on first run.
+let _lastFrameworkId = 'coaching';
 
 // Idle preset: low energy + low engagement keep the orb's drift slow and
 // meditative. The hero shouldn't feel like a busy screensaver while users
@@ -87,9 +90,11 @@ function setBodyState(target) {
   else if (target === 'reflecting') document.body.classList.add('session-reflecting');
 }
 
-async function activate() {
+async function activate(frameworkId = _lastFrameworkId || 'coaching') {
+  const framework = FRAMEWORKS[frameworkId] || FRAMEWORKS.coaching;
+  _lastFrameworkId = framework.id;
   if (state === 'active') return;
-  // Allow Begin click during a lingering reflection to skip straight into a new session
+  // Allow character click during a lingering reflection to skip straight into a new session
   if (state === 'reflecting') resetReflection();
 
   // ── Pre-flight: client-side credit gate ─────────────────────────────
@@ -114,7 +119,7 @@ async function activate() {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ framework: 'coaching' }),
+      body: JSON.stringify({ framework: framework.id }),
     });
     if (r.status === 429) {
       log('rate limited (unauthed) — paywall with login');
@@ -159,7 +164,7 @@ async function activate() {
     sessionStartedAt = Date.now();
     avatar.setMode('reflect');
     avatar.setPresence(SESSION_START_PRESENCE);
-    const framework = FRAMEWORKS.coaching;
+    if ($topicsHeader) $topicsHeader.textContent = framework.name;
     conductor = new SessionConductor(framework);
     conductor.onChange(({ phase, mode, depth }) => {
       avatar.setMode(mode);
@@ -324,6 +329,7 @@ function dismissReflection() {
   avatar.setPresence(IDLE_PRESENCE); // restore idle target so orbs resume natural drift
   avatar.setMode('hold');            // back to slow meditative drift
   avatar.setDepth(0);                // clear any depth the conductor accumulated
+  if ($topicsHeader) $topicsHeader.textContent = '';
   resetReflection();
   // Clean slate — land at the top of the page on return
   window.scrollTo(0, 0);
@@ -394,6 +400,8 @@ const $reflectHome = document.getElementById('reflect-home');
 const $tUser = document.getElementById('t-user');
 const $tModel = document.getElementById('t-model');
 const $topics = document.querySelectorAll('.topic');
+const $topicsHeader = document.getElementById('topics-header');
+const $characterBtns = document.querySelectorAll('.character-btn[data-framework]');
 
 // ── Topic switcher ──────────────────────────────────────────────────────
 // Each click sends a brief natural-language inject to Gemini so the model
@@ -422,11 +430,17 @@ $topics.forEach((b) => {
 });
 
 // ── Wiring ───────────────────────────────────────────────────────────────
-document.getElementById('begin-btn').addEventListener('click', activate);
+// Each character button is its own session-start path — picking the
+// character IS the begin. The user's NEED is the entry point, not the
+// framework as a feature toggle.
+$characterBtns.forEach((b) => {
+  b.addEventListener('click', () => activate(b.dataset.framework));
+});
 document.getElementById('end-session').addEventListener('click', endSession);
 $reflectForm.addEventListener('submit', onReflectionSubmit);
-$reflectTertiary.addEventListener('click', activate);  // Start another → directly into a new session
-$reflectHome.addEventListener('click', dismissReflection);  // Back to home → idle landing
+// Start another → re-enters the same character the previous session used
+$reflectTertiary.addEventListener('click', () => activate(_lastFrameworkId));
+$reflectHome.addEventListener('click', dismissReflection);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state === 'reflecting') dismissReflection();
 });

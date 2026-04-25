@@ -121,35 +121,66 @@ body.session-reflecting .orb-backdrop {
   color: var(--accent);
 }
 
-.hero-sub {
-  font-size: clamp(16px, 2.5vw, 20px);
+/* Question replaces the old subtitle. Reads as a prompt the user answers
+   by choosing a character — the choice IS the begin. */
+.hero-question {
+  font-size: clamp(15px, 1.5vw, 18px);
   font-weight: 300;
   color: var(--muted);
-  line-height: 1.6;
-  margin-bottom: 48px;
+  letter-spacing: 0.2px;
+  margin-bottom: 32px;
 }
 
-/* Primary CTA — ghost pattern, restrained. The orb is the focal point;
-   the button is a quiet invitation, not a billboard. */
-.begin-btn {
+/* Character grid — 5 buttons, each a "need" the user might have right
+   now. The character name (Coaching, Friend, etc.) sits as small subtitle
+   so first-time users learn the mapping; mature users just scan the verbs. */
+.character-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  max-width: 720px;
+  margin: 0 0 28px;
+}
+
+.character-btn {
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  padding: 12px 32px;
-  border-radius: 40px;
-  border: 1px solid rgba(184, 160, 255, 0.4);
-  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 22px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(12, 12, 20, 0.45);
   color: var(--text);
   cursor: pointer;
-  transition: background 220ms ease, border-color 220ms ease, transform 220ms ease;
+  transition: border-color 220ms ease, background 220ms ease, transform 220ms ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  min-width: 130px;
 }
 
-.begin-btn:hover {
-  background: rgba(184, 160, 255, 0.1);
-  border-color: var(--accent);
+.character-btn:hover {
+  border-color: rgba(184, 160, 255, 0.5);
+  background: rgba(184, 160, 255, 0.06);
   transform: translateY(-1px);
+}
+
+.character-need {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.character-name {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 /* Privacy reassurance below the CTA — same line the production playground
@@ -267,6 +298,29 @@ body.session-active #topics {
   pointer-events: none;
   transition: opacity 400ms ease;
 }
+
+/* Character indicator — sits above the topics so the user always knows
+   "this is a Coaching session" / "this is Meditation" while it's running.
+   Hidden when empty (no character set yet). */
+.topics-header {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(184, 160, 255, 0.08);
+  border: 1px solid rgba(184, 160, 255, 0.25);
+  text-align: center;
+  margin-bottom: 6px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.topics-header:empty { display: none; }
 
 .topic {
   display: flex;
