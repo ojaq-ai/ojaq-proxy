@@ -10,10 +10,6 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* Language-gated visibility — data-lang on <html> drives which copy shows */
-html[data-lang="en"] [data-lang="tr"] { display: none; }
-html[data-lang="tr"] [data-lang="en"] { display: none; }
-
 :root {
   --bg: #08080c;
   --text: #e8e8f0;
@@ -328,33 +324,14 @@ footer {
 </head>
 <body>
 
-<script>
-// Detect UI language and set data-lang on <html> before first paint.
-// Order: ?lang=tr|en URL param > navigator.language prefix > fallback 'en'.
-(function() {
-  const urlLang = new URLSearchParams(location.search).get('lang');
-  const browserLang = (navigator.language || 'en').toLowerCase().slice(0, 2);
-  const lang = (urlLang === 'tr' || urlLang === 'en') ? urlLang
-             : (browserLang === 'tr' ? 'tr' : 'en');
-  document.documentElement.setAttribute('data-lang', lang);
-})();
-</script>
-
 <!-- ── hero ── -->
 <div class="hero">
   <canvas id="orbs"></canvas>
   <div class="hero-content">
     <div class="logo">Ojaq</div>
-    <div data-lang="tr">
-      <h1>Düşüncelerinizi açığa çıkaran, <em>iç sesinizi</em> duyuran bir alan.</h1>
-      <p class="subtitle">Sesle konuşursunuz. Ojaq dinler. Mantığınızın söylediği ile sezginizin bildiği aynı alanda buluşur.</p>
-      <a href="/playground" class="cta">Ojaq'ı dene</a>
-    </div>
-    <div data-lang="en">
-      <h1>An intelligence that listens <em>beneath</em> your words.</h1>
-      <p class="subtitle">A voice-first space. Where your analytical mind and your intuition can finally meet.</p>
-      <a href="/playground" class="cta">Try Ojaq</a>
-    </div>
+    <h1>An intelligence that listens <em>beneath</em> your words.</h1>
+    <p class="subtitle">A voice-first space. Where your analytical mind and your intuition can finally meet.</p>
+    <a href="/playground" class="cta">Try Ojaq</a>
   </div>
   <div class="scroll-hint">
     <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -474,14 +451,11 @@ footer {
 
 <!-- ── waitlist ── -->
 <div class="waitlist">
-  <h2 data-lang="tr">Gelişmelerden haberdar olun</h2>
-  <h2 data-lang="en">Stay in the loop</h2>
-  <p data-lang="tr">Ojaq gelişmeye devam ediyor. Yeniliklerden haberdar olmak için bırakın.</p>
-  <p data-lang="en">Ojaq is still evolving. Leave your email to hear about what's next.</p>
+  <h2>Stay in the loop</h2>
+  <p>Ojaq is still evolving. Leave your email to hear about what's next.</p>
   <form class="email-form" id="waitlist-form">
     <input type="email" placeholder="your@email.com" required id="email-input">
-    <button type="submit" data-lang="tr">Kayıt ol</button>
-    <button type="submit" data-lang="en">Join waitlist</button>
+    <button type="submit">Join waitlist</button>
   </form>
   <p class="email-note" id="form-note">No spam. One email when it's ready.</p>
 </div>
@@ -579,23 +553,15 @@ document.getElementById('waitlist-form').addEventListener('submit', async (e) =>
   if (!email) return;
 
   const msgs = {
-    tr: {
-      success: "Kaydınız alındı.",
-      error: "Bir sorun oldu, tekrar deneyin.",
-      duplicate: "Zaten kayıtlısınız."
-    },
-    en: {
-      success: "You're in. We'll be in touch.",
-      error: "Something went wrong. Try again.",
-      duplicate: "You're already on the list."
-    }
+    success: "You're in. We'll be in touch.",
+    error: "Something went wrong. Try again.",
+    duplicate: "You're already on the list."
   };
-  const lang = document.documentElement.getAttribute('data-lang') || 'en';
 
   // Local dedupe
   const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
   if (sent.includes(email.toLowerCase())) {
-    document.getElementById('form-note').textContent = msgs[lang].duplicate;
+    document.getElementById('form-note').textContent = msgs.duplicate;
     document.getElementById('form-note').style.color = '#b8a0ff';
     return;
   }
@@ -611,11 +577,11 @@ document.getElementById('waitlist-form').addEventListener('submit', async (e) =>
       sent.push(email.toLowerCase());
       localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
       document.getElementById('email-input').value = '';
-      document.getElementById('form-note').textContent = msgs[lang].success;
+      document.getElementById('form-note').textContent = msgs.success;
       document.getElementById('form-note').style.color = '#b8a0ff';
     }
   } catch {
-    document.getElementById('form-note').textContent = msgs[lang].error;
+    document.getElementById('form-note').textContent = msgs.error;
     document.getElementById('form-note').style.color = '#ff6b6b';
   }
 });
