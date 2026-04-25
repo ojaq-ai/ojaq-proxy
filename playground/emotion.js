@@ -1,12 +1,17 @@
 // ── Emotion: streaming speech-emotion-recognition WebSocket client ──────
-// Wraps the Modal-hosted audeering wav2vec2 emotion endpoint.
-// Input:  raw 16kHz int16 PCM chunks (ArrayBuffer). Server buffers a 1.0s
-//         window and slides 0.5s, so predictions land at ~2/sec.
-// Output: JSON {emotion, intensity, arousal, valence, dominance, ts}
-//         where emotion is one of: joy | trust | fear | surprise |
-//         sadness | disgust | anger | anticipation | neutral.
+// Connects to the same-origin /emotion-ws endpoint, which proxies to
+// Hume's Expression Measurement (prosody) API on the server side. The
+// Hume API key never reaches the browser — see src/emotion_proxy.py.
+//
+// Input:  raw 16kHz int16 PCM chunks (ArrayBuffer). Server buffers a
+//         3s window before each Hume call.
+// Output: JSON {emotion, intensity, raw_emotion, raw_score} — only
+//         delivered when intensity >= 0.30 (server-side gate so the
+//         orb doesn't flicker on weak reads).
+//         emotion is one of: joy | trust | fear | surprise | sadness
+//         | disgust | anger | anticipation | neutral.
 
-const ENDPOINT = 'wss://gokhan--ojaq-emotion-emotionclassifier-web.modal.run/ws';
+const ENDPOINT = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/emotion-ws`;
 
 export class EmotionConnection {
   constructor() {

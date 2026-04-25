@@ -100,6 +100,11 @@ from wallet import router as wallet_router, init_wallet
 init_wallet(wallet_dir=WALLET_DIR)
 app.include_router(wallet_router)
 
+# Hume Expression Measurement proxy — keeps the API key server-side
+# and bridges browser PCM → Hume prosody → Plutchik label → browser.
+from emotion_proxy import router as emotion_router  # noqa: E402
+app.include_router(emotion_router)
+
 # Founding Members billing — Stripe checkout + webhook → wallet credits
 from billing import router as billing_router, init_billing
 init_billing(
