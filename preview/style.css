@@ -390,6 +390,29 @@ body.reflection-visible .reflection {
   pointer-events: auto;
 }
 
+/* Session summary — latest presence signal from /analyze. The model's
+   single-sentence observation about what was alive in the conversation. */
+.reflect-signal {
+  font-size: 17px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 460px;
+  display: none;  /* JS shows when populated */
+}
+
+.reflect-duration {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+  display: none;  /* JS shows when >= 1 minute */
+}
+
 .reflect-line {
   font-size: 16px;
   font-weight: 300;
@@ -397,6 +420,13 @@ body.reflection-visible .reflection {
   letter-spacing: 0.2px;
   line-height: 1.5;
   margin: 0;
+}
+
+/* When a signal IS shown, the static "Carry this with you" line softens
+   to a quieter follow-on (the signal is the focal sentence). */
+.reflect-signal:not([style*="display: none"]) ~ .reflect-line {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .reflect-form {

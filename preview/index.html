@@ -128,6 +128,9 @@
 
 <!-- Post-session reflection — fades in 2s after End -->
 <div class="reflection" id="reflection">
+  <!-- Session summary: latest presence signal + duration. Both hidden when empty. -->
+  <p class="reflect-signal" id="reflect-signal"></p>
+  <p class="reflect-duration" id="reflect-duration"></p>
   <p class="reflect-line" id="reflect-line">Carry this with you.</p>
   <form class="reflect-form" id="reflect-form">
     <input type="email" id="reflect-email" placeholder="your@email.com" required autocomplete="email">

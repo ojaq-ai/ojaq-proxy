@@ -59,6 +59,11 @@ let conductor = null;
 let presenceHistory = null;
 let lastUserText = '';
 let lastModelText = '';
+// Latest single-sentence observation from /analyze. Surfaced in the
+// reflection screen as a real session summary (not a generated end-of-
+// session call — just the model's most recent honest read).
+let lastSignal = '';
+let sessionStartedAt = 0;
 
 // Idle preset: low energy + low engagement keep the orb's drift slow and
 // meditative. The hero shouldn't feel like a busy screensaver while users
@@ -150,6 +155,8 @@ async function activate() {
     // into "listening" right now, before the first /analyze even fires.
     presenceHistory = new PresenceHistory(20);
     _smoothedPresence = null;
+    lastSignal = '';
+    sessionStartedAt = Date.now();
     avatar.setMode('reflect');
     avatar.setPresence(SESSION_START_PRESENCE);
     const framework = FRAMEWORKS.coaching;
@@ -273,12 +280,14 @@ async function analyzePresence(userText, modelText) {
     const p = await r.json();
     if (!p || p.error) return;
     presenceHistory?.push(p);
+    if (p.signal) lastSignal = p.signal;
     // Conductor reads the raw presence (we want its phase/mode logic to
     // see actual values, not the smoothed envelope).
     conductor?.onPresence(p, () => {});
     // Avatar reads the smoothed presence — softer transitions between turns.
     avatar.setPresence(blendPresence(p));
     log(`presence e=${p.energy} c=${p.confidence} r=${p.resistance} eng=${p.engagement} cong=${p.congruence} s=${p.sentiment}`);
+    if (p.signal) log(`signal: ${p.signal}`);
   } catch {
     // Silent — never let presence interrupt anything
   }
@@ -287,6 +296,9 @@ async function analyzePresence(userText, modelText) {
 function endSession() {
   if (state !== 'active') return;
   state = 'reflecting';
+  // Capture summary inputs BEFORE teardownVoice clears state
+  const durationMs = sessionStartedAt ? Date.now() - sessionStartedAt : 0;
+  const summarySignal = lastSignal;
   teardownVoice();
   setBodyState('reflecting');
   $topics.forEach((b) => b.classList.remove('active'));
@@ -294,7 +306,8 @@ function endSession() {
   // it's uncluttered intentionally. Restored in dismissReflection.
   avatar.settleToRest(1200);
   resetReflection();
-  log('reflection began');
+  renderReflectionSummary(summarySignal, durationMs);
+  log(`reflection began (signal="${summarySignal.slice(0, 40)}…" duration=${Math.round(durationMs / 1000)}s)`);
   // Brief pause then reveal the soft offer — quicker than the prior 2s,
   // still long enough to feel like a breath rather than a snap.
   reflectionRevealTimer = setTimeout(() => {
@@ -329,6 +342,24 @@ function resetReflection() {
   $reflectEmail.value = '';
   $reflectEmail.disabled = false;
   $reflectSubmit.disabled = false;
+  // Clear summary so prior session doesn't bleed into the new reflection
+  if ($reflectSignal) { $reflectSignal.textContent = ''; $reflectSignal.style.display = 'none'; }
+  if ($reflectDuration) { $reflectDuration.textContent = ''; $reflectDuration.style.display = 'none'; }
+}
+
+// Show the latest /analyze signal as the focal sentence + session length.
+// Both lines hide if their data is missing — first turn of a brand-new
+// session may end before /analyze ever returns, and that's fine.
+function renderReflectionSummary(signal, durationMs) {
+  if (signal && $reflectSignal) {
+    $reflectSignal.textContent = signal;
+    $reflectSignal.style.display = '';
+  }
+  const mins = Math.floor(durationMs / 60000);
+  if (mins >= 1 && $reflectDuration) {
+    $reflectDuration.textContent = `${mins} minute${mins > 1 ? 's' : ''}`;
+    $reflectDuration.style.display = '';
+  }
 }
 
 async function onReflectionSubmit(e) {
@@ -353,6 +384,8 @@ async function onReflectionSubmit(e) {
 
 // ── DOM handles ──────────────────────────────────────────────────────────
 const $reflectLine = document.getElementById('reflect-line');
+const $reflectSignal = document.getElementById('reflect-signal');
+const $reflectDuration = document.getElementById('reflect-duration');
 const $reflectForm = document.getElementById('reflect-form');
 const $reflectEmail = document.getElementById('reflect-email');
 const $reflectSubmit = document.querySelector('.reflect-submit');
