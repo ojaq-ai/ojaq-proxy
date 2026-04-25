@@ -103,6 +103,7 @@ body {
   letter-spacing: -0.03em;
   max-width: 760px;
   margin-bottom: 28px;
+  transition: opacity 500ms ease;
 }
 
 .hero-title em {
@@ -117,6 +118,7 @@ body {
   max-width: 520px;
   line-height: 1.6;
   margin-bottom: 56px;
+  transition: opacity 500ms ease 60ms;
 }
 
 .orb-hint {
@@ -130,6 +132,50 @@ body {
 }
 
 @keyframes hintFadeIn { to { opacity: 1; } }
+
+/* ── End session button (only visible while session active) ───────────── */
+.end-btn {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 32px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(7, 7, 11, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 32px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 500ms ease 200ms, color 200ms ease, border-color 200ms ease;
+  z-index: 20;
+}
+
+.end-btn:hover { color: var(--text); border-color: var(--muted); }
+
+/* ── Active-session state ─────────────────────────────────────────────── */
+body.session-active { overflow: hidden; }
+
+body.session-active .hero-title,
+body.session-active .hero-sub,
+body.session-active .orb-hint {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.session-active .end-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The orb stays animating throughout — that's the constant. */
 
 /* ── editorial sections ──────────────────────────────────────────────── */
 .editorial {

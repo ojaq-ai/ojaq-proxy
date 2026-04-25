@@ -10,10 +10,25 @@ const log = (msg) => console.log(`[preview] ${msg}`);
 const canvas = document.getElementById('orb-canvas');
 const avatar = new Avatar(canvas);
 
-// Click handler for the orb trigger button — voice/session wiring lands in commit 2+.
-const trigger = document.getElementById('orb-trigger');
-trigger.addEventListener('click', () => {
-  log('orb clicked — voice/session wiring not yet present (commit 2+)');
-});
+// ── Session state machine — visual-only for now (commit 2) ──────────────
+// Voice/audio/Gemini wiring lands in commit 3, slotted into activate()/deactivate().
+let active = false;
 
-log('preview ready (visual shell only)');
+function activate() {
+  if (active) return;
+  active = true;
+  document.body.classList.add('session-active');
+  log('session activated (visual only — voice in commit 3)');
+}
+
+function deactivate() {
+  if (!active) return;
+  active = false;
+  document.body.classList.remove('session-active');
+  log('session deactivated');
+}
+
+document.getElementById('orb-trigger').addEventListener('click', activate);
+document.getElementById('end-session').addEventListener('click', deactivate);
+
+log('preview ready');
