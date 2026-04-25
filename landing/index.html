@@ -326,19 +326,18 @@ section p strong {
   margin: 0;
 }
 
-/* ── waitlist ── */
+/* ── waitlist (secondary capture, lower visual weight) ── */
 .waitlist {
   text-align: center;
-  padding: 120px 24px 160px;
+  padding: 80px 24px 120px;
 }
 
 .waitlist h2 {
-  margin-bottom: 16px;
-}
-
-.waitlist p {
-  text-align: center;
-  margin-bottom: 40px;
+  font-size: clamp(18px, 2.5vw, 22px);
+  font-weight: 300;
+  color: var(--text);
+  margin-bottom: 24px;
+  line-height: 1.4;
 }
 
 .email-form {
@@ -564,13 +563,12 @@ footer {
   </div>
 </section>
 
-<!-- ── waitlist ── -->
+<!-- ── waitlist (secondary CTA — mobile-launch notification) ── -->
 <div class="waitlist">
-  <h2>Stay in the loop</h2>
-  <p>Ojaq is still evolving. Leave your email to hear about what's next.</p>
+  <h2>Be the first to know when Ojaq comes to mobile.</h2>
   <form class="email-form" id="waitlist-form">
     <input type="email" placeholder="your@email.com" required id="email-input">
-    <button type="submit">Join waitlist</button>
+    <button type="submit">Notify me</button>
   </form>
   <p class="email-note" id="form-note">No spam. One email when it's ready.</p>
 </div>
