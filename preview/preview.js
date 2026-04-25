@@ -447,6 +447,17 @@ $waitlistForm?.addEventListener('submit', async (e) => {
 // ── Auth chip + login modal — reuses /playground/billing.js verbatim ───
 billing.init().catch((e) => log(`billing init failed: ${e.message}`));
 
+// Editorial pack cards — same checkout flow as the paywall modal.
+// Anchors fall back to /playground if JS fails; with JS, we intercept,
+// route unauthed users through the login modal first, then redirect to
+// Stripe with return_path=/preview/ so they come back here.
+document.querySelectorAll('.pack[data-package]').forEach((el) => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    billing.startCheckout(el.dataset.package);
+  });
+});
+
 // Fade the orb backdrop to near-invisible once the user scrolls past the
 // hero. Avoids competing with editorial reading; restored via CSS
 // session-active rule when a session starts (where the orb IS the focus).
