@@ -121,6 +121,21 @@ body.session-reflecting .orb-backdrop {
   color: var(--accent);
 }
 
+/* Quiet bridge between the brand h1 and the verb chips — turns the page
+   into a literal answer: title states what Ojaq is, question prompts the
+   user, chips are the answers. Without it the chips read as a feature
+   menu rather than an invitation. */
+.hero-question {
+  font-size: clamp(14px, 1.4vw, 16px);
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.2px;
+  margin-top: 8px;
+  margin-bottom: 24px;
+  font-style: italic;
+  opacity: 0.85;
+}
+
 /* Character grid — 5 single-line invitations. The verb itself describes
    what the user needs right now; the underlying character (Coaching,
    Meditation, etc.) is in title=  for hover and accessibility, but never
@@ -131,7 +146,6 @@ body.session-reflecting .orb-backdrop {
   gap: 10px;
   justify-content: center;
   max-width: 640px;
-  margin-top: 12px;
 }
 
 .character-btn {

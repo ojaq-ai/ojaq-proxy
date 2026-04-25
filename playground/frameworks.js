@@ -104,14 +104,11 @@ You hold no agenda. You are not trying to fix, guide, or change anything. You ar
       avoid: ['challenge'],
       challengeThreshold: null,
     },
-    // Self-Discovery modalities = observation lenses, not topics. The
-    // user invites the mirror to look at a particular angle of self.
-    modalities: [
-      { id: 'loud',         label: "What's loud",      inject: "Help me notice what's loud right now." },
-      { id: 'quiet',        label: "What's quiet",     inject: "Help me notice what's quiet underneath." },
-      { id: 'almost-said',  label: 'What I almost said', inject: "There's something I almost said but didn't." },
-      { id: 'pattern',      label: 'A pattern',         inject: "I want to see a pattern I keep doing." },
-    ],
+    // No modalities — Self-Discovery is non-declarative. The user shows
+    // up with whatever is alive and the mirror reflects. Pre-picking a
+    // lens breaks the form: the framework's whole point is that it
+    // doesn't ask. The character header pill is enough on the rail.
+    modalities: [],
   },
 
   therapy: {
@@ -156,15 +153,11 @@ You can joke. You can call them out gently. You react like a real person. You're
       avoid: [],
       challengeThreshold: { confidence: 60, congruence: 30 },
     },
-    // Friend modalities = emotional registers, not topics. The user
-    // sets the tone of the chat: vent, bounce, celebrate, real, quiet.
-    modalities: [
-      { id: 'vent',       label: 'Vent',          inject: "I just need to vent for a sec." },
-      { id: 'bounce',     label: 'Bounce ideas',  inject: "Let me bounce something off you." },
-      { id: 'celebrate',  label: 'Celebrate',     inject: "Something good happened — let me tell you." },
-      { id: 'real-talk',  label: 'Real talk',     inject: "I want some real talk, no sugar." },
-      { id: 'quiet',      label: 'Just be quiet', inject: "Can we just be quiet for a sec? Just here." },
-    ],
+    // No modalities — Friend is conversational, not menu-driven. You
+    // don't pre-declare "I'm going to vent" to a real friend; you just
+    // start talking. Pre-picking the tone makes the chat feel like a
+    // form. Character header pill on the rail is enough.
+    modalities: [],
   },
 
   together: {
