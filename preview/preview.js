@@ -15,11 +15,21 @@ const avatar = new Avatar(canvas);
 
 // ── Session state machine ────────────────────────────────────────────────
 //   idle ↔ active → reflecting → idle  (reflecting → active via "Start another")
+//
+//   While active or reflecting, all surrounding chrome (nav, hero text+button,
+//   editorial, footer, auth chip) is hidden via body classes and CSS. The orb
+//   stays centered as the constant visual anchor; it just sharpens (blur lifts)
+//   when entering a session and dims again when returning to landing.
+//
+//   We pushState a synthetic history entry on activate so the browser back
+//   button cleanly ends a live session. Pairing pop with state transitions
+//   keeps the history stack tidy: a clean session leaves no entry behind.
 let state = 'idle';
 let gemini = null;
 let mic = null;
 let player = null;
 let reflectionRevealTimer = null;
+let _historyPushed = false;
 
 const IDLE_PRESENCE = { energy: 30, confidence: 50, resistance: 5, engagement: 40, congruence: 60, sentiment: 0.1 };
 
@@ -31,11 +41,20 @@ function setBodyState(target) {
 
 async function activate() {
   if (state === 'active') return;
-  // Allow orb-click to skip a lingering reflection straight into a new session
+  // Allow Begin click during a lingering reflection to skip straight into a new session
   if (state === 'reflecting') resetReflection();
   state = 'active';
   setBodyState('active');
   billing.setSessionActive(true);
+  // Snap to top so the orb is the only focal point — the editorial/nav are
+  // visibility:hidden but laid out from the top, so without scrollTo the user
+  // could resume mid-page on subsequent activations.
+  window.scrollTo(0, 0);
+  // Push a session entry so browser back ends the session cleanly
+  if (!_historyPushed) {
+    history.pushState({ session: true }, '');
+    _historyPushed = true;
+  }
   log('session activating…');
 
   try {
@@ -69,6 +88,7 @@ async function activate() {
     setBodyState('idle');
     billing.setSessionActive(false);
     teardownVoice();
+    if (_historyPushed) { _historyPushed = false; history.back(); }
   }
 }
 
@@ -83,7 +103,8 @@ function endSession() {
   state = 'reflecting';
   teardownVoice();
   setBodyState('reflecting');
-  billing.setSessionActive(false);
+  // Keep the auth chip suppressed through the reflection moment too —
+  // it's uncluttered intentionally. Restored in dismissReflection.
   avatar.settleToRest(2500);
   resetReflection();
   log('reflection began (2s hold)');
@@ -98,13 +119,21 @@ function dismissReflection() {
   state = 'idle';
   if (reflectionRevealTimer) { clearTimeout(reflectionRevealTimer); reflectionRevealTimer = null; }
   setBodyState('idle');
+  billing.setSessionActive(false);   // chip returns
   avatar.setPresence(IDLE_PRESENCE); // restore idle target so orbs resume natural drift
   resetReflection();
+  // Clean slate — land at the top of the page on return
+  window.scrollTo(0, 0);
+  // Pop the synthetic session entry so back button doesn't replay the session
+  if (_historyPushed) {
+    _historyPushed = false;
+    history.back();
+  }
   log('returned to idle');
 }
 
 function resetReflection() {
-  $reflectLine.textContent = 'Save this thread to come back to it.';
+  $reflectLine.textContent = 'Carry this with you.';
   $reflectForm.style.display = '';
   $reflectTertiary.style.display = '';
   $reflectEmail.value = '';
@@ -140,12 +169,21 @@ const $reflectSubmit = document.querySelector('.reflect-submit');
 const $reflectTertiary = document.getElementById('reflect-tertiary');
 
 // ── Wiring ───────────────────────────────────────────────────────────────
-document.getElementById('orb-trigger').addEventListener('click', activate);
+document.getElementById('begin-btn').addEventListener('click', activate);
 document.getElementById('end-session').addEventListener('click', endSession);
 $reflectForm.addEventListener('submit', onReflectionSubmit);
 $reflectTertiary.addEventListener('click', activate);  // Start another → directly into a new session
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state === 'reflecting') dismissReflection();
+});
+
+// Browser back during a live or reflecting session ends/dismisses cleanly.
+// The pushed entry is already gone from the stack by the time popstate fires,
+// so we clear the flag and route to the right transition.
+window.addEventListener('popstate', () => {
+  _historyPushed = false;
+  if (state === 'active') endSession();
+  else if (state === 'reflecting') dismissReflection();
 });
 
 // ── Waitlist form (mobile-launch capture) ──────────────────────────────

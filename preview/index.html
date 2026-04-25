@@ -71,20 +71,21 @@
 </div>
 
 <main class="hero">
-  <div class="orb-container">
+  <div class="orb-backdrop">
     <canvas id="orb-canvas"></canvas>
-    <button id="orb-trigger" type="button" aria-label="Begin a session"></button>
   </div>
-  <h1 class="hero-title">An intelligence that listens <em>beneath</em> your words.</h1>
-  <p class="hero-sub">A voice-first space. Where your analytical mind and your intuition can finally meet.</p>
-  <p class="orb-hint" id="orb-hint">Tap the orb to begin</p>
+  <div class="hero-content">
+    <h1 class="hero-title">An intelligence that listens <em>beneath</em> your words.</h1>
+    <p class="hero-sub">A voice-first space. Where your analytical mind and your intuition can finally meet.</p>
+    <button id="begin-btn" class="begin-btn" type="button">Begin a session</button>
+  </div>
 </main>
 
 <button id="end-session" class="end-btn" type="button">End</button>
 
 <!-- Post-session reflection — fades in 2s after End -->
 <div class="reflection" id="reflection">
-  <p class="reflect-line" id="reflect-line">Save this thread to come back to it.</p>
+  <p class="reflect-line" id="reflect-line">Carry this with you.</p>
   <form class="reflect-form" id="reflect-form">
     <input type="email" id="reflect-email" placeholder="your@email.com" required autocomplete="email">
     <button type="submit" class="reflect-submit">Save</button>
