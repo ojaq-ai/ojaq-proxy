@@ -53,6 +53,23 @@ def _stripe_module():
         return None
 
 
+def _sf(obj, key, default=None):
+    """Safe field access for Stripe StripeObject (no .get method) or plain dict.
+
+    Stripe Python SDK v11+ StripeObject does NOT inherit from dict — calling
+    .get(key, default) on it raises AttributeError because Python's attribute
+    lookup falls through __getattr__ → __getitem__("get") → KeyError.
+    Use [] / __getitem__ which is implemented; default on KeyError.
+    """
+    if obj is None:
+        return default
+    try:
+        v = obj[key]
+    except (KeyError, TypeError):
+        return default
+    return v if v is not None else default
+
+
 def _is_configured() -> bool:
     """All three checkout-side env vars + at least the relevant price IDs must be set."""
     return bool(_STRIPE_SECRET_KEY and _APP_URL and any(_PRICE_IDS.values()))
@@ -125,17 +142,20 @@ async def webhook(request: Request):
         logger.exception("webhook: construct_event failed")
         return JSONResponse({"error": "construct_failed", "detail": str(e)}, 400)
 
-    event_type = event.get("type", "")
+    event_type = _sf(event, "type", "")
     if event_type != "checkout.session.completed":
         # Acknowledge but ignore other event types (subscription updates, etc.)
         logger.info("webhook ignored event=%s", event_type)
         return {"ok": True, "ignored": event_type}
 
-    session = event["data"]["object"]
-    metadata = session.get("metadata") or {}
-    email = (metadata.get("email") or session.get("customer_email") or "").strip().lower()
-    package = (metadata.get("package") or "").strip().lower()
-    stripe_session_id = session.get("id", "")
+    session = _sf(_sf(event, "data", {}), "object", {})
+    metadata = _sf(session, "metadata", {}) or {}
+    email = (
+        (_sf(metadata, "email", "") or _sf(session, "customer_email", "") or "")
+        .strip().lower()
+    )
+    package = (_sf(metadata, "package", "") or "").strip().lower()
+    stripe_session_id = _sf(session, "id", "") or ""
 
     if not email or package not in PACKAGES:
         logger.warning("webhook: missing/invalid metadata email=%r package=%r", email, package)
