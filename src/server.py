@@ -100,6 +100,18 @@ from wallet import router as wallet_router, init_wallet
 init_wallet(wallet_dir=WALLET_DIR)
 app.include_router(wallet_router)
 
+# Founding Members billing — Stripe checkout + webhook → wallet credits
+from billing import router as billing_router, init_billing
+init_billing(
+    stripe_secret_key=STRIPE_SECRET_KEY,
+    webhook_secret=STRIPE_WEBHOOK_SECRET,
+    price_starter=STRIPE_PRICE_STARTER,
+    price_ritual=STRIPE_PRICE_RITUAL,
+    price_evergreen=STRIPE_PRICE_EVERGREEN,
+    app_url=APP_URL,
+)
+app.include_router(billing_router)
+
 
 # ── Rate limiting (in-memory only, never persisted) ──────────────────────
 _rate_map = {}  # ip -> [timestamp, ...]

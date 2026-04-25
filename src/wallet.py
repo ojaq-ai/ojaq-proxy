@@ -166,6 +166,17 @@ def evergreen_active(wallet: dict) -> bool:
     return not _is_past(wallet.get("evergreenExpiresAt"))
 
 
+def has_processed_stripe_session(email: str, stripe_session_id: str) -> bool:
+    """Idempotency check for webhook replays — has this Stripe session ID already credited the wallet?"""
+    if not stripe_session_id:
+        return False
+    w = _read_wallet(email)
+    for entry in (w.get("history") or []):
+        if entry.get("stripe_session") == stripe_session_id:
+            return True
+    return False
+
+
 def get_summary(email: str) -> dict:
     """Snapshot for /me endpoint: credits/plan/evergreenActive, no history."""
     w = _read_wallet(email)
