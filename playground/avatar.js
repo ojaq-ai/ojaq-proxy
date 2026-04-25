@@ -45,13 +45,15 @@ const MODE_CONFIG = {
 class Orb {
   constructor(cx, cy, scale) {
     const s = scale || 1;
-    this.x = cx + (Math.random() - 0.5) * 160 * s;
-    this.y = cy + (Math.random() - 0.5) * 160 * s;
-    this.vx = (Math.random() - 0.5) * 0.5;
-    this.vy = (Math.random() - 0.5) * 0.5;
-    this.baseR = (8 + Math.random() * 16) * s;
     this.phase = Math.random() * Math.PI * 2;
     this.orbitR = (30 + Math.random() * 70) * s;
+    // Born already on the orbital path — no scatter-and-converge phase.
+    // The opening seconds need a meditative alignment, not chaotic settling.
+    this.x = cx + Math.cos(this.phase) * this.orbitR;
+    this.y = cy + Math.sin(this.phase * 0.7) * this.orbitR * 0.6;
+    this.vx = 0;
+    this.vy = 0;
+    this.baseR = (8 + Math.random() * 16) * s;
   }
 
   update(cx, cy, params) {
@@ -82,6 +84,7 @@ class Orb {
     this._speakerHue = params.speakerHue || 0;
     this._speakerSat = params.speakerSat || 0;
     this._speakerStrength = params.speakerStrength || 0;
+    this._birthOpacity = params.birthOpacity ?? 1;
   }
 
   draw(ctx, t) {
@@ -90,7 +93,7 @@ class Orb {
     const sentimentSat = 35 + this._warmth * 25;
     const hue = shortArcHueLerp(sentimentHue, this._speakerHue, this._speakerStrength);
     const sat = lerp(sentimentSat, this._speakerSat, this._speakerStrength);
-    const alpha = 0.2 + this._brightness * 0.5;  // always visible, brighter with engagement
+    const alpha = (0.2 + this._brightness * 0.5) * this._birthOpacity;  // always visible, brighter with engagement; faded during birth
 
     // Glow
     const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 3);
@@ -136,6 +139,9 @@ export class Avatar {
     this.speakerSat = 0;
     this.speakerStrength = 0;
     this._colorTween = null;
+    // Frame-count fade-in for a meditative entrance (~1.5s @ 60fps).
+    // Prevents the first second from feeling like the orbs are crashing into existence.
+    this._birthFrames = 0;
     this._resize();
     window.addEventListener('resize', () => this._resize());
     this._animate();
@@ -244,6 +250,11 @@ export class Avatar {
     const { energy, confidence, resistance, engagement, congruence, sentiment } = this.current;
     const mc = MODE_CONFIG[this.mode] || MODE_CONFIG.reflect;
 
+    // Birth fade-in — orbs emerge from invisible to natural opacity over ~1.5s.
+    // Once fully born, this stays at 1 forever and is a no-op.
+    this._birthFrames++;
+    const birthOpacity = Math.min(1, this._birthFrames / 90);
+
     const params = {
       speed:      map(energy, 0, 100, 0.6, 2.5) * mc.speedMul,
       cohesion:   map(confidence, 0, 100, 0.2, 1.0) * mc.cohesionMul * (0.5 + this.depth * 0.5),
@@ -255,6 +266,7 @@ export class Avatar {
       speakerHue:      this.speakerHue,
       speakerSat:      this.speakerSat,
       speakerStrength: this.speakerStrength,
+      birthOpacity,
     };
 
     const cx = this.w / 2, cy = this.h / 2;

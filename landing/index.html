@@ -10,10 +10,6 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* Language-gated visibility — data-lang on <html> drives which copy shows */
-html[data-lang="en"] [data-lang="tr"] { display: none; }
-html[data-lang="tr"] [data-lang="en"] { display: none; }
-
 :root {
   --bg: #08080c;
   --text: #e8e8f0;
@@ -30,6 +26,42 @@ body {
   color: var(--text);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ── header (simple top, non-sticky) ── */
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  position: relative;
+  z-index: 2;
+}
+
+.site-logo {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.site-signin {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.site-signin:hover { color: var(--text); }
+
+@media (max-width: 600px) {
+  .site-header { padding: 20px 20px; }
+  .site-logo { letter-spacing: 4px; }
 }
 
 /* ── hero ── */
@@ -55,15 +87,6 @@ canvas#orbs {
   text-align: center;
   max-width: 640px;
   padding: 0 24px;
-}
-
-.logo {
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 6px;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 48px;
 }
 
 h1 {
@@ -246,19 +269,75 @@ section p strong {
   color: var(--muted);
 }
 
-/* ── waitlist ── */
-.waitlist {
-  text-align: center;
-  padding: 120px 24px 160px;
+/* ── pricing (Founding Members) ── */
+.packs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 48px;
 }
 
-.waitlist h2 {
+.pack {
+  padding: 32px 24px;
+  border: 1px solid #1a1a24;
+  border-radius: 14px;
+  background: #0c0c14;
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.pack:hover {
+  border-color: var(--accent);
+  background: #100f1a;
+  transform: translateY(-2px);
+}
+
+.pack-name {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.pack-price {
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.pack-amount {
+  font-size: 13px;
+  color: var(--muted);
   margin-bottom: 16px;
 }
 
-.waitlist p {
+.pack-desc {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ── waitlist (secondary capture, lower visual weight) ── */
+.waitlist {
   text-align: center;
-  margin-bottom: 40px;
+  padding: 80px 24px 120px;
+}
+
+.waitlist h2 {
+  font-size: clamp(18px, 2.5vw, 22px);
+  font-weight: 300;
+  color: var(--text);
+  margin-bottom: 24px;
+  line-height: 1.4;
 }
 
 .email-form {
@@ -328,33 +407,19 @@ footer {
 </head>
 <body>
 
-<script>
-// Detect UI language and set data-lang on <html> before first paint.
-// Order: ?lang=tr|en URL param > navigator.language prefix > fallback 'en'.
-(function() {
-  const urlLang = new URLSearchParams(location.search).get('lang');
-  const browserLang = (navigator.language || 'en').toLowerCase().slice(0, 2);
-  const lang = (urlLang === 'tr' || urlLang === 'en') ? urlLang
-             : (browserLang === 'tr' ? 'tr' : 'en');
-  document.documentElement.setAttribute('data-lang', lang);
-})();
-</script>
+<!-- ── header (non-sticky, scrolls away) ── -->
+<header class="site-header">
+  <a href="/" class="site-logo">Ojaq</a>
+  <a href="/playground" class="site-signin">Sign in</a>
+</header>
 
 <!-- ── hero ── -->
 <div class="hero">
   <canvas id="orbs"></canvas>
   <div class="hero-content">
-    <div class="logo">Ojaq</div>
-    <div data-lang="tr">
-      <h1>Düşüncelerinizi açığa çıkaran, <em>iç sesinizi</em> duyuran bir alan.</h1>
-      <p class="subtitle">Sesle konuşursunuz. Ojaq dinler. Mantığınızın söylediği ile sezginizin bildiği aynı alanda buluşur.</p>
-      <a href="/playground" class="cta">Ojaq'ı dene</a>
-    </div>
-    <div data-lang="en">
-      <h1>An intelligence that listens <em>beneath</em> your words.</h1>
-      <p class="subtitle">A voice-first space. Where your analytical mind and your intuition can finally meet.</p>
-      <a href="/playground" class="cta">Try Ojaq</a>
-    </div>
+    <h1>An intelligence that listens <em>beneath</em> your words.</h1>
+    <p class="subtitle">A voice-first space. Where your analytical mind and your intuition can finally meet.</p>
+    <a href="/playground" class="cta">Try Ojaq</a>
   </div>
   <div class="scroll-hint">
     <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -456,32 +521,54 @@ footer {
       </div>
     </div>
     <div class="step">
-      <div class="step-num" style="color: #88dd99;">R</div>
-      <div>
-        <h3>Reflection</h3>
-        <p>Holds space. Validates before exploring. When resistance rises, softens. When engagement drops, waits. Quiet witnessing, not prescription.</p>
-      </div>
-    </div>
-    <div class="step">
       <div class="step-num" style="color: #ddaa88;">F</div>
       <div>
         <h3>Friend</h3>
         <p>Someone who actually listens. Can joke. Can call you out. Gets quiet when something's heavy. Just real.</p>
       </div>
     </div>
+    <div class="step">
+      <div class="step-num" style="color: #a0c9c9;">T</div>
+      <div>
+        <h3>Together — For two</h3>
+        <p>A third voice in the room. For two people who want a witness, not a mediator. Hears what moves between them. Speaks rarely. Listens fully.</p>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- ── waitlist ── -->
+<!-- ── pricing (Founding Members) ── -->
+<section>
+  <div class="section-label">Continue with Ojaq</div>
+  <h2>Choose a pack.</h2>
+  <div class="packs">
+    <a class="pack" href="/playground">
+      <div class="pack-name">Starter</div>
+      <div class="pack-price">$29</div>
+      <div class="pack-amount">10 sessions</div>
+      <p class="pack-desc">Ephemeral by design — nothing saved, nothing kept. Begin where you are.</p>
+    </a>
+    <a class="pack" href="/playground">
+      <div class="pack-name">Ritual</div>
+      <div class="pack-price">$79</div>
+      <div class="pack-amount">30 sessions</div>
+      <p class="pack-desc">For the conversations you return to. A practice, not a product.</p>
+    </a>
+    <a class="pack" href="/playground">
+      <div class="pack-name">Evergreen</div>
+      <div class="pack-price">$199 / year</div>
+      <div class="pack-amount">Unlimited sessions</div>
+      <p class="pack-desc">For when Ojaq becomes part of how you think.</p>
+    </a>
+  </div>
+</section>
+
+<!-- ── waitlist (secondary CTA — mobile-launch notification) ── -->
 <div class="waitlist">
-  <h2 data-lang="tr">Gelişmelerden haberdar olun</h2>
-  <h2 data-lang="en">Stay in the loop</h2>
-  <p data-lang="tr">Ojaq gelişmeye devam ediyor. Yeniliklerden haberdar olmak için bırakın.</p>
-  <p data-lang="en">Ojaq is still evolving. Leave your email to hear about what's next.</p>
+  <h2>Be the first to know when Ojaq comes to mobile.</h2>
   <form class="email-form" id="waitlist-form">
     <input type="email" placeholder="your@email.com" required id="email-input">
-    <button type="submit" data-lang="tr">Kayıt ol</button>
-    <button type="submit" data-lang="en">Join waitlist</button>
+    <button type="submit">Notify me</button>
   </form>
   <p class="email-note" id="form-note">No spam. One email when it's ready.</p>
 </div>
@@ -579,23 +666,15 @@ document.getElementById('waitlist-form').addEventListener('submit', async (e) =>
   if (!email) return;
 
   const msgs = {
-    tr: {
-      success: "Kaydınız alındı.",
-      error: "Bir sorun oldu, tekrar deneyin.",
-      duplicate: "Zaten kayıtlısınız."
-    },
-    en: {
-      success: "You're in. We'll be in touch.",
-      error: "Something went wrong. Try again.",
-      duplicate: "You're already on the list."
-    }
+    success: "You're in. We'll be in touch.",
+    error: "Something went wrong. Try again.",
+    duplicate: "You're already on the list."
   };
-  const lang = document.documentElement.getAttribute('data-lang') || 'en';
 
   // Local dedupe
   const sent = JSON.parse(localStorage.getItem('ojaq_wl_sent') || '[]');
   if (sent.includes(email.toLowerCase())) {
-    document.getElementById('form-note').textContent = msgs[lang].duplicate;
+    document.getElementById('form-note').textContent = msgs.duplicate;
     document.getElementById('form-note').style.color = '#b8a0ff';
     return;
   }
@@ -611,11 +690,11 @@ document.getElementById('waitlist-form').addEventListener('submit', async (e) =>
       sent.push(email.toLowerCase());
       localStorage.setItem('ojaq_wl_sent', JSON.stringify(sent));
       document.getElementById('email-input').value = '';
-      document.getElementById('form-note').textContent = msgs[lang].success;
+      document.getElementById('form-note').textContent = msgs.success;
       document.getElementById('form-note').style.color = '#b8a0ff';
     }
   } catch {
-    document.getElementById('form-note').textContent = msgs[lang].error;
+    document.getElementById('form-note').textContent = msgs.error;
     document.getElementById('form-note').style.color = '#ff6b6b';
   }
 });
