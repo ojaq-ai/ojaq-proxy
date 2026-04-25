@@ -165,6 +165,7 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     avatar.setMode('reflect');
     avatar.setPresence(SESSION_START_PRESENCE);
     if ($topicsHeader) $topicsHeader.textContent = framework.name;
+    renderModalities(framework);
     conductor = new SessionConductor(framework);
     conductor.onChange(({ phase, mode, depth }) => {
       avatar.setMode(mode);
@@ -306,7 +307,7 @@ function endSession() {
   const summarySignal = lastSignal;
   teardownVoice();
   setBodyState('reflecting');
-  $topics.forEach((b) => b.classList.remove('active'));
+  $modalitiesList?.querySelectorAll('.modality').forEach((b) => b.classList.remove('active'));
   // Keep the auth chip suppressed through the reflection moment too —
   // it's uncluttered intentionally. Restored in dismissReflection.
   avatar.settleToRest(1200);
@@ -330,6 +331,7 @@ function dismissReflection() {
   avatar.setMode('hold');            // back to slow meditative drift
   avatar.setDepth(0);                // clear any depth the conductor accumulated
   if ($topicsHeader) $topicsHeader.textContent = '';
+  if ($modalitiesList) $modalitiesList.replaceChildren();
   resetReflection();
   // Clean slate — land at the top of the page on return
   window.scrollTo(0, 0);
@@ -399,35 +401,40 @@ const $reflectTertiary = document.getElementById('reflect-tertiary');
 const $reflectHome = document.getElementById('reflect-home');
 const $tUser = document.getElementById('t-user');
 const $tModel = document.getElementById('t-model');
-const $topics = document.querySelectorAll('.topic');
 const $topicsHeader = document.getElementById('topics-header');
+const $modalitiesList = document.getElementById('modalities-list');
 const $characterBtns = document.querySelectorAll('.character-btn[data-framework]');
 
-// ── Topic switcher ──────────────────────────────────────────────────────
-// Each click sends a brief natural-language inject to Gemini so the model
-// pivots to the chosen domain. Inject phrasing intentionally reads as user
-// input — the model treats it as a redirect from the speaker, not a system
-// command, which keeps responses grounded in the framework's voice.
-const TOPIC_INJECTS = {
-  work:         "Let's shift focus to my work — career, projects, what I'm building.",
-  relationship: "Let's talk about my relationships — connection, family, friends.",
-  growth:       "Let's focus on my personal growth — change, becoming, inner work.",
-  couple:       "Let's talk about my partnership — what's alive between us.",
-};
-
-function selectTopic(topic) {
-  if (state !== 'active' || !gemini) return;
-  $topics.forEach((b) => b.classList.toggle('active', b.dataset.topic === topic));
-  const inject = TOPIC_INJECTS[topic];
-  if (inject) {
-    gemini.sendText(inject);
-    log(`-> topic: ${topic}`);
+// ── Modality rail ────────────────────────────────────────────────────────
+// Each character has its OWN modalities list (framework.modalities) —
+// Coach offers life domains, Meditation offers practice forms, Friend
+// offers emotional registers. The rail is rebuilt per-character.
+//
+// Click sends a natural-language inject; the model treats it as user
+// input (not a [CMD:] marker), so it pivots inside the character's voice.
+function renderModalities(framework) {
+  if (!$modalitiesList) return;
+  $modalitiesList.replaceChildren();
+  for (const m of framework.modalities || []) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'modality';
+    btn.textContent = m.label;
+    btn.dataset.modality = m.id;
+    btn.addEventListener('click', () => selectModality(btn, m));
+    $modalitiesList.appendChild(btn);
   }
 }
 
-$topics.forEach((b) => {
-  b.addEventListener('click', () => selectTopic(b.dataset.topic));
-});
+function selectModality(btn, m) {
+  if (state !== 'active' || !gemini) return;
+  $modalitiesList.querySelectorAll('.modality').forEach((b) => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (m.inject) {
+    gemini.sendText(m.inject);
+    log(`-> modality: ${m.id}`);
+  }
+}
 
 // ── Wiring ───────────────────────────────────────────────────────────────
 // Each character button is its own session-start path — picking the

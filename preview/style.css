@@ -281,27 +281,26 @@ body.session-active #topics {
   transition: opacity 500ms ease 300ms;
 }
 
-/* ── Topic rail (left side, active session only) ──────────────────────
-   Pill-shaped icon buttons in a vertical stack. The label is hidden by
-   default (icon-only resting state) and slides in on hover or when the
-   topic is active — keeps the rail unobtrusive while still legible. */
+/* ── Left rail (active session only) ─────────────────────────────────
+   Holds the character indicator pill + a vertical stack of modality
+   chips. Modalities are rendered per-character: each character has its
+   own DSL of "ways into the conversation" (Coach offers life domains,
+   Meditation offers practice forms, Friend offers tones). Chips are
+   text-only — modalities are described in words, not icons. */
 #topics {
   position: fixed;
   left: 20px;
   top: 50%;
   transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   z-index: 18;
   opacity: 0;
   pointer-events: none;
   transition: opacity 400ms ease;
+  width: 180px;
 }
 
-/* Character indicator — sits above the topics so the user always knows
-   "this is a Coaching session" / "this is Meditation" while it's running.
-   Hidden when empty (no character set yet). */
+/* Character indicator — sits above modalities so the user always knows
+   which character they're in mid-session. Hidden when empty. */
 .topics-header {
   font-family: inherit;
   font-size: 10px;
@@ -315,75 +314,53 @@ body.session-active #topics {
   background: rgba(184, 160, 255, 0.08);
   border: 1px solid rgba(184, 160, 255, 0.25);
   text-align: center;
-  margin-bottom: 6px;
+  margin-bottom: 14px;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 
 .topics-header:empty { display: none; }
 
-.topic {
+#modalities-list {
   display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 10px 12px;
-  font-family: inherit;
-  background: rgba(8, 8, 12, 0.55);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  color: var(--muted);
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: color 220ms ease, border-color 220ms ease, background 220ms ease, gap 220ms ease, padding-right 220ms ease;
-  overflow: hidden;
-  max-width: 44px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.topic svg {
-  width: 18px;
-  height: 18px;
+.modality {
   display: block;
-  flex-shrink: 0;
-}
-
-.topic-label {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  color: var(--muted);
+  background: rgba(8, 8, 12, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-align: left;
   white-space: nowrap;
-  opacity: 0;
-  max-width: 0;
-  transition: opacity 220ms ease, max-width 220ms ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
 }
 
-.topic:hover,
-.topic.active {
+.modality:hover {
   color: var(--text);
   border-color: rgba(184, 160, 255, 0.4);
-  background: rgba(184, 160, 255, 0.08);
-  gap: 10px;
-  padding-right: 18px;
-  max-width: 180px;
+  background: rgba(184, 160, 255, 0.06);
 }
 
-.topic:hover .topic-label,
-.topic.active .topic-label {
-  opacity: 1;
-  max-width: 130px;
-}
-
-.topic.active {
+.modality.active {
+  color: var(--text);
   border-color: var(--accent);
+  background: rgba(184, 160, 255, 0.1);
 }
 
 @media (max-width: 600px) {
-  #topics { left: 12px; gap: 8px; }
-  .topic { padding: 8px 10px; max-width: 38px; }
-  .topic svg { width: 16px; height: 16px; }
-  .topic-label { display: none; }
-  .topic:hover, .topic.active { padding-right: 10px; max-width: 38px; gap: 0; }
+  #topics { left: 12px; width: 150px; }
+  .modality { font-size: 12px; padding: 7px 12px; }
 }
 
 /* ── Live transcripts (visible during active session only) ────────────

@@ -68,6 +68,15 @@ Match it without announcing the choice.`,
       avoid: [],
       challengeThreshold: { confidence: 70, congruence: 40 },
     },
+    // Modalities = the lenses this character offers. Coaching works on
+    // life domains: career, relationships, body, decisions, change.
+    modalities: [
+      { id: 'work',          label: 'Work',           inject: "Let's focus on my work — career, projects, what I'm building." },
+      { id: 'relationships', label: 'Relationships',  inject: "Let's talk about my relationships — connection, family, friends." },
+      { id: 'health',        label: 'Health',         inject: "Let's focus on my health and energy." },
+      { id: 'decision',      label: 'A decision',     inject: "I'm sitting with a decision and want to think it through." },
+      { id: 'change',        label: 'A change',       inject: "I want to make a change and don't know where to start." },
+    ],
   },
 
   selfDiscovery: {
@@ -95,6 +104,14 @@ You hold no agenda. You are not trying to fix, guide, or change anything. You ar
       avoid: ['challenge'],
       challengeThreshold: null,
     },
+    // Self-Discovery modalities = observation lenses, not topics. The
+    // user invites the mirror to look at a particular angle of self.
+    modalities: [
+      { id: 'loud',         label: "What's loud",      inject: "Help me notice what's loud right now." },
+      { id: 'quiet',        label: "What's quiet",     inject: "Help me notice what's quiet underneath." },
+      { id: 'almost-said',  label: 'What I almost said', inject: "There's something I almost said but didn't." },
+      { id: 'pattern',      label: 'A pattern',         inject: "I want to see a pattern I keep doing." },
+    ],
   },
 
   therapy: {
@@ -139,6 +156,15 @@ You can joke. You can call them out gently. You react like a real person. You're
       avoid: [],
       challengeThreshold: { confidence: 60, congruence: 30 },
     },
+    // Friend modalities = emotional registers, not topics. The user
+    // sets the tone of the chat: vent, bounce, celebrate, real, quiet.
+    modalities: [
+      { id: 'vent',       label: 'Vent',          inject: "I just need to vent for a sec." },
+      { id: 'bounce',     label: 'Bounce ideas',  inject: "Let me bounce something off you." },
+      { id: 'celebrate',  label: 'Celebrate',     inject: "Something good happened — let me tell you." },
+      { id: 'real-talk',  label: 'Real talk',     inject: "I want some real talk, no sugar." },
+      { id: 'quiet',      label: 'Just be quiet', inject: "Can we just be quiet for a sec? Just here." },
+    ],
   },
 
   together: {
@@ -173,6 +199,14 @@ Respond only when addressed. Otherwise, listen.`,
       avoid: ['challenge'],
       challengeThreshold: null,
     },
+    // Together modalities = entry doors for two people to talk to each
+    // other through the witness, not topics about a single life domain.
+    modalities: [
+      { id: 'hard-to-say',  label: 'Hard to say',    inject: "There's something hard to say to each other." },
+      { id: 'working',      label: "What's working", inject: "Let's talk about what's working between us." },
+      { id: 'avoiding',     label: 'What we avoid',  inject: "There's something we keep avoiding." },
+      { id: 'moment',       label: 'A moment',       inject: "There's a moment between us we want to look at." },
+    ],
   },
 
   meditation: {
@@ -212,6 +246,15 @@ Match it without announcing the choice.`,
       avoid: ['challenge', 'celebrate'],
       challengeThreshold: null,
     },
+    // Meditation modalities = practice forms. The user picks the shape
+    // of the sit, not a topic to talk about.
+    modalities: [
+      { id: 'breath',          label: 'Breath',          inject: "Lead me through breath awareness." },
+      { id: 'body-scan',       label: 'Body scan',       inject: "Take me through a body scan." },
+      { id: 'loving-kindness', label: 'Loving-kindness', inject: "Lead me through a loving-kindness practice." },
+      { id: 'open-awareness',  label: 'Open awareness',  inject: "Open awareness — let whatever arises arise." },
+      { id: 'closing',         label: 'Closing',         inject: "A short closing — bring me back gently." },
+    ],
   },
 
   meet: {
