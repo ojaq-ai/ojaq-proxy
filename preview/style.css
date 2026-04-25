@@ -177,6 +177,121 @@ body.session-active .end-btn {
 
 /* The orb stays animating throughout — that's the constant. */
 
+/* ── Reflection state (post-session) ─────────────────────────────────── */
+/* During reflection: hero copy still hidden, scroll still locked, but
+   End button is gone and reflection content fades in 2s after End click. */
+body.session-reflecting {
+  overflow: hidden;
+}
+
+body.session-reflecting .hero-title,
+body.session-reflecting .hero-sub,
+body.session-reflecting .orb-hint {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.session-reflecting .end-btn {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reflection {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  max-width: 520px;
+  padding: 0 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 800ms ease;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* Reveal happens after the 2s hold via JS adding .reflection-visible */
+body.reflection-visible .reflection {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.reflect-line {
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: 0.2px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.reflect-form {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.reflect-form input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 18px;
+  border-radius: 32px;
+  border: 1px solid var(--line);
+  background: rgba(7, 7, 11, 0.7);
+  color: var(--text);
+  width: 240px;
+  outline: none;
+  text-align: center;
+  transition: border-color 200ms ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.reflect-form input:focus { border-color: var(--accent); }
+
+.reflect-submit {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 22px;
+  border-radius: 32px;
+  border: 1px solid var(--line);
+  background: rgba(7, 7, 11, 0.7);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.reflect-submit:hover { color: var(--text); border-color: var(--accent); }
+
+.reflect-tertiary {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  transition: color 200ms ease;
+}
+
+.reflect-tertiary:hover { color: var(--text); }
+
 /* ── editorial sections ──────────────────────────────────────────────── */
 .editorial {
   max-width: 880px;
