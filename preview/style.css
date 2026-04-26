@@ -239,28 +239,27 @@ body.session-active.framework-concierge #modules-nav {
   pointer-events: auto;
 }
 
-/* Concierge → module hand-off — orb breathes lightly while the soul
-   inside it changes (Gemini disconnects + reconnects with new prompt).
-   ~800ms gap, masked by hue tween + caption fade-in. */
+/* Concierge → module hand-off — quick visual handshake. ~250ms hold
+   plus gemini connect (~600-1000ms cold), masked by hue tween +
+   caption. Total perceived gap ~1s. */
 body.session-transitioning .orb-backdrop {
   filter: blur(2px);
-  transition: filter 600ms ease;
+  transition: filter 250ms ease;
 }
 
 /* Module nav rail fades out during transition so it's gone by the
    time the new framework's left-side modality rail appears. */
 body.session-transitioning #modules-nav {
   opacity: 0;
-  transition: opacity 600ms ease;
+  transition: opacity 300ms ease;
 }
 
-/* Hand-off caption — "Coaching" / "Meditation" / etc. flashes
-   centered above the orb during the transition gap. Quiet,
-   ceremonial, fades back out once the new framework's greeting
-   starts speaking. */
+/* Hand-off caption — module name flashes during the transition AND
+   persists ~1.5s into the new session as an orientation cue. Faster
+   in-fade, slower out-fade for a "settling" feel. */
 #handoff-caption {
   position: fixed;
-  top: 32%;
+  top: 28%;
   left: 50%;
   transform: translateX(-50%);
   font-family: inherit;
@@ -272,12 +271,13 @@ body.session-transitioning #modules-nav {
   opacity: 0;
   pointer-events: none;
   z-index: 30;
-  transition: opacity 600ms ease;
+  transition: opacity 800ms ease;  /* slower out for soft settle */
   text-shadow: 0 0 24px rgba(184, 160, 255, 0.35);
 }
 
 #handoff-caption.visible {
   opacity: 0.75;
+  transition: opacity 250ms ease;  /* fast in */
 }
 
 /* ── End session button (only visible while session active) ───────────── */

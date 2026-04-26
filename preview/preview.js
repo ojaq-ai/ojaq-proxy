@@ -113,7 +113,7 @@ function setFrameworkClass(id) {
   if (id) document.body.classList.add(`framework-${id}`);
 }
 
-async function activate(frameworkId = _lastFrameworkId || 'coaching') {
+async function activate(frameworkId = _lastFrameworkId || 'coaching', contextSnippet = '') {
   const framework = FRAMEWORKS[frameworkId] || FRAMEWORKS.coaching;
   _lastFrameworkId = framework.id;
   if (state === 'active') return;
@@ -251,9 +251,16 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       if (state === 'active') endSession();
     };
 
-    const prompt = assemblePrompt(framework);
+    // Optional handoff context — concierge's recent dialog. Prepended
+    // to the system instruction at connect time so the module picks up
+    // the thread without us having to inject text mid-session (which
+    // Gemini Live treats as a user message).
+    let prompt = assemblePrompt(framework);
+    if (contextSnippet) {
+      prompt = prompt + `\n\nPRIOR CONVERSATION (the user just arrived from Concierge — pick up the thread; do NOT re-greet from zero, acknowledge what was just said and continue):\n${contextSnippet}`;
+    }
     await gemini.connect(prompt, [], userLanguage);
-    log(`gemini connected (lang=${userLanguage})`);
+    log(`gemini connected (lang=${userLanguage}${contextSnippet ? ', with-context' : ''})`);
 
     player = new AudioPlayer();
     player.init();
@@ -464,27 +471,39 @@ async function handoffTo(targetFrameworkId) {
   // Tease the target framework's hue NOW so the orb starts shifting
   // BEFORE the new connection lands — masks the audio gap.
   if (target.color) {
-    avatar.setSpeakerColor(target.color, 900);
+    avatar.setSpeakerColor(target.color, 400);
   }
-  // Caption reveal — module name fades in mid-transition
+  // Caption reveal — module name fades in during transition AND stays
+  // visible into the first ~1.5s of the new session as an orientation cue.
   showHandoffCaption(target.name);
+
+  // Build a context snippet from the concierge's last few turns so the
+  // module picks up the thread instead of starting from zero.
+  let contextSnippet = '';
+  if (fromId === 'concierge' && _conciergeHistory.length) {
+    contextSnippet = _conciergeHistory.slice(-6).map(t =>
+      `${t.role === 'user' ? 'User' : 'Concierge'}: ${t.text}`
+    ).join('\n');
+  }
 
   teardownVoice();
   $modalitiesList?.replaceChildren();
   if ($topicsHeader) $topicsHeader.textContent = '';
   state = 'idle';
 
-  // 800ms hold so the visual transition feels deliberate, not jarring,
-  // and gives the prior turn's audio a beat to land before the new
-  // greeting starts.
-  await new Promise(r => setTimeout(r, 800));
+  // Snappy hold — quick beat for the visual to register, no longer
+  // ceremonial. Total perceived gap is dominated by gemini.connect
+  // (~600-1000ms cold), this is just the visual handshake.
+  await new Promise(r => setTimeout(r, 250));
 
   document.body.classList.remove('session-transitioning');
-  await activate(targetFrameworkId);
-  hideHandoffCaption();
-  // After connect, clear the speakerColor tease — the new framework
-  // takes over emotion-driven hue from here.
-  setTimeout(() => avatar.setSpeakerColor(null, 600), 1200);
+  await activate(targetFrameworkId, contextSnippet);
+  // Caption persists ~1.5s into the new session as orientation cue,
+  // then fades. Combined with the modality rail's character pill
+  // (visible immediately on activate), the user sees clearly where
+  // they landed.
+  setTimeout(hideHandoffCaption, 1500);
+  setTimeout(() => avatar.setSpeakerColor(null, 600), 1800);
 }
 
 // Brief on-screen caption that flashes the target module name during
