@@ -1096,4 +1096,54 @@ footer a:hover { color: var(--muted); }
      each verb is its own thumb-sized line, evenly spaced. */
   .character-grid { flex-direction: column; gap: 8px; max-width: none; width: 100%; }
   .character-btn { width: 100%; white-space: normal; }
+
+  /* Mobile is voice-first. Both side rails (modules nav during concierge,
+     modality rail during a module) would smother the orb on a ~360px
+     screen — two ~150px-wide rails leave almost no breathing room. Hide
+     them and let voice navigation carry the flow. Orientation cue moves
+     to a small floating pill near the top of the screen. */
+  #modules-nav { display: none; }
+  #topics { display: none; }
+
+  /* Done button + reflection — respect iOS/Android safe-area at the
+     bottom so they don't get hidden behind the home indicator. */
+  .end-btn { bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+  .reflection { bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Handoff caption a little higher so it doesn't collide with the nav */
+  #handoff-caption { top: 24%; }
+}
+
+/* Mobile-only character pill — shows current framework name as a small
+   floating chip near the top of the screen. Replaces the rail's pill
+   on phones, where the rails are hidden. Empty by default; populated
+   by JS when a session activates. Hidden above 600px (rail does the job). */
+.mobile-character-pill {
+  display: none;
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+  padding: 5px 14px;
+  border-radius: 16px;
+  background: rgba(184, 160, 255, 0.08);
+  border: 1px solid rgba(184, 160, 255, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 18;
+  pointer-events: none;
+}
+.mobile-character-pill:empty { display: none !important; }
+@media (max-width: 600px) {
+  body.session-active .mobile-character-pill,
+  body.session-reflecting .mobile-character-pill {
+    display: block;
+  }
 }

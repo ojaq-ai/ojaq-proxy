@@ -192,6 +192,7 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching', contextSni
     avatar.setMode('reflect');
     avatar.setPresence(SESSION_START_PRESENCE);
     if ($topicsHeader) $topicsHeader.textContent = framework.name;
+    if ($mobilePill) $mobilePill.textContent = framework.name;
     renderModalities(framework);
     conductor = new SessionConductor(framework);
     conductor.onChange(({ phase, mode, depth }) => {
@@ -488,6 +489,7 @@ function returnToLanding() {
   avatar.setMode('hold');
   avatar.setDepth(0);
   if ($topicsHeader) $topicsHeader.textContent = '';
+  if ($mobilePill) $mobilePill.textContent = '';
   if ($modalitiesList) $modalitiesList.replaceChildren();
   resetReflection();
   window.scrollTo(0, 0);
@@ -594,6 +596,7 @@ function dismissReflection() {
   avatar.setMode('hold');            // back to slow meditative drift
   avatar.setDepth(0);                // clear any depth the conductor accumulated
   if ($topicsHeader) $topicsHeader.textContent = '';
+  if ($mobilePill) $mobilePill.textContent = '';
   if ($modalitiesList) $modalitiesList.replaceChildren();
   resetReflection();
   // Clean slate — land at the top of the page on return
@@ -667,6 +670,7 @@ const $tUser = document.getElementById('t-user');
 const $tModel = document.getElementById('t-model');
 const $topicsHeader = document.getElementById('topics-header');
 const $modalitiesList = document.getElementById('modalities-list');
+const $mobilePill = document.getElementById('mobile-character-pill');
 const $characterBtns = document.querySelectorAll('.character-btn[data-framework]');
 
 // ── Modality rail ────────────────────────────────────────────────────────
