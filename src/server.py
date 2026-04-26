@@ -434,9 +434,9 @@ async def analyze_presence(request: Request):
 # watches and acts. Same async-per-turn cadence as /analyze.
 ROOM_OBSERVE_PROMPT = """\
 You are the Room Presence — a silent observer in Ojaq's entry room.
-The user is talking with the Concierge, who greets and routes to one
-of six modules. You watch the conversation and decide ONLY ONE thing:
-has the user agreed to enter a specific module yet?
+You watch the user's conversation with the Concierge and TRIGGER the
+route to a module when the user has agreed. You are the deciding voice
+on routing — the Concierge cannot transition without you.
 
 Modules:
   coaching      — thinking through decisions, change, work, next steps
@@ -449,27 +449,63 @@ Modules:
 CONVERSATION SO FAR (chronological):
 {history}
 
-DECISION RULES
-- Route ONLY when the user has clearly AGREED to enter a specific module.
-  Verbal agreement ("yes", "ok", "let's go", "tamam", "evet"), an
-  enthusiastic match ("that sounds right"), or an explicit request
-  ("take me to meditation") all count.
-- Be conservative. If you're unsure, "wait".
-- Don't route on the FIRST exchange. Give the concierge room to clarify.
-- If the user gives a clear ABSENT signal (silence, deflection, change
-  of subject), wait.
-- The user CAN bypass the concierge by clicking a chip directly; you
-  don't see those clicks, so don't worry about them.
+WHEN TO ROUTE (any ONE of these is enough — be DECISIVE not cautious):
+
+  A. The user verbally agrees to a module the Concierge just suggested.
+     Yes / okay / sure / let's / let's do it / let's go / sounds good /
+     evet / tamam / olur / hadi / başlayalım / geçelim
+  B. The user explicitly names a module ("take me to coaching", "I
+     want meditation", "geçelim koçluğa", "meditasyona git").
+  C. The Concierge says it's transitioning ("going there now", "let
+     me take you over", "yes let's", "geçiyoruz", "alıyorum seni") —
+     this is the Concierge confirming the user already agreed; route now.
+
+WHEN TO WAIT
+  - The user is still exploring / asking clarifying questions.
+  - The user is being vague ("I'm not sure", "maybe").
+  - The Concierge has only just opened the conversation and the
+    user hasn't responded yet.
+
+EXAMPLES
+
+Example 1 (route):
+  Concierge: What brings you in?
+  User: I want to think through a job decision.
+  Concierge: Coaching feels right. Yes?
+  User: Yes.
+  → {{"action": "route", "module_id": "coaching", "confidence": 0.9}}
+
+Example 2 (route — Turkish):
+  Concierge: Hoş geldin. Bugün ne var üzerinde?
+  User: Sakinleşmem lazım.
+  Concierge: Meditasyon iyi gelir. Geçelim mi?
+  User: Evet, hadi.
+  → {{"action": "route", "module_id": "meditation", "confidence": 0.9}}
+
+Example 3 (route — concierge already confirming):
+  User: Take me to voice training.
+  Concierge: Yes, going there now.
+  → {{"action": "route", "module_id": "voice", "confidence": 0.95}}
+
+Example 4 (wait — still exploring):
+  Concierge: What brings you in?
+  User: I'm not sure, just feeling off.
+  Concierge: Want me to take you to a quieter space first?
+  → {{"action": "wait"}}
+
+Example 5 (wait — clarifying):
+  Concierge: Coaching might fit. Want to try?
+  User: What does coaching do?
+  → {{"action": "wait"}}
 
 OUTPUT
 Strict JSON, no markdown, no explanation. One of:
   {{"action": "wait"}}
   {{"action": "route", "module_id": "<id>", "confidence": 0.0..1.0}}
 
-confidence ≥ 0.7 → strong agreement
-confidence 0.5-0.7 → likely but ambiguous (return only if you're
-                     willing to let the route fire)
-< 0.5 → use "wait" instead.
+If you see a clear agreement signal, return route with confidence
+≥ 0.7. Borderline cases (user said something agreement-ish but not
+explicit): 0.5-0.7. Below 0.5 use wait.
 """
 
 
@@ -508,11 +544,16 @@ async def room_observe(request: Request):
             if text.endswith("```"):
                 text = text[:-3]
             decision = json.loads(text.strip())
-            # Defensive: gate on confidence + valid module_id
+            # Defensive: gate on confidence + valid module_id.
+            # 0.4 floor (was 0.5) — observer was too cautious, leaving
+            # users repeatedly confirming for transitions that should
+            # have fired. With the strengthened prompt + few-shot
+            # examples, sub-0.4 is genuinely uncertain; sub-0.4-route
+            # gets collapsed to wait.
             if decision.get("action") == "route":
                 conf = float(decision.get("confidence", 0))
                 mid = decision.get("module_id", "")
-                if conf < 0.5 or mid not in {
+                if conf < 0.4 or mid not in {
                     "coaching", "selfDiscovery", "friend",
                     "meditation", "voice", "together",
                 }:
