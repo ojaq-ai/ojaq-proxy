@@ -358,28 +358,34 @@ function blendPresence(newP) {
 // closure variable isn't in its lexical scope.
 async function observeRoom(history) {
   if (state !== 'active' || _lastFrameworkId !== 'concierge') return;
+  // Diagnostic — dump the last 2 turns the observer is actually seeing
+  const recent = history.slice(-4).map(t =>
+    `${t.role === 'user' ? 'U' : 'C'}:${(t.text || '').slice(0, 60)}`
+  ).join(' | ');
+  log(`observe -> ${recent}`);
   try {
     const r = await fetch('/room/observe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ history }),
     });
-    if (!r.ok) return;
+    if (!r.ok) {
+      log(`observe http ${r.status}`);
+      return;
+    }
     const d = await r.json();
     if (d?.action === 'route' && d?.module_id && FRAMEWORKS[d.module_id]) {
       const conf = (d.confidence ?? 0).toFixed(2);
       log(`room presence: route -> ${d.module_id} (conf=${conf})`);
-      // Defer to turnComplete (already cleared, but the next iteration
-      // of onTurnComplete picks this up).
       _pendingTransition = d.module_id;
-      // If we're already past turnComplete (no more ai turn coming),
-      // fire immediately.
       handoffTo(d.module_id);
     } else if (d?.action === 'wait') {
       log('room presence: wait');
+    } else {
+      log(`observe unknown action: ${JSON.stringify(d)}`);
     }
-  } catch {
-    // Silent — observer failure shouldn't disrupt the conversation
+  } catch (e) {
+    log(`observe failed: ${e?.message || e}`);
   }
 }
 
@@ -445,8 +451,13 @@ async function handoffTo(targetFrameworkId) {
   if (state !== 'active') return;
   const target = FRAMEWORKS[targetFrameworkId];
   if (!target) { log(`unknown handoff target: ${targetFrameworkId}`); return; }
-  const fromName = framework?.name || 'Concierge';
-  log(`handoff: ${framework?.id || 'concierge'} -> ${targetFrameworkId}`);
+  // Re-entry guard — observer may fire twice in quick succession
+  if (_lastFrameworkId === targetFrameworkId) {
+    log(`handoff skipped: already on ${targetFrameworkId}`);
+    return;
+  }
+  const fromId = _lastFrameworkId || 'concierge';
+  log(`handoff: ${fromId} -> ${targetFrameworkId}`);
 
   // Mark transition state for CSS cross-fade
   document.body.classList.add('session-transitioning');
@@ -627,7 +638,7 @@ const $moduleChips = document.querySelectorAll('.module-chip[data-framework]');
 $moduleChips.forEach((b) => {
   b.addEventListener('click', () => {
     const targetId = b.dataset.framework;
-    if (state === 'active' && framework?.id === 'concierge') {
+    if (state === 'active' && _lastFrameworkId === 'concierge') {
       handoffTo(targetId);
     } else {
       activate(targetId);
