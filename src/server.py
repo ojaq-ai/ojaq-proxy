@@ -489,7 +489,13 @@ async def room_observe(request: Request):
     prompt = ROOM_OBSERVE_PROMPT.format(history=rendered)
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
+        # temperature 0 — same dialog ALWAYS produces same decision.
+        # 0.1 had observable variance: identical "Concierge said going,
+        # user said yes" inputs returned wait on one call, route on the
+        # next. Routing is a classification, not a generation — the
+        # exploration noise costs us turn-level latency in the user's
+        # perception (one wait = one extra round of "hadi geçelim").
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
     }
 
     last_error = None
