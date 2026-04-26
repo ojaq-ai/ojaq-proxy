@@ -297,14 +297,16 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching', contextSni
     await mic.start();
     log('mic active');
 
+    // Tighter post-connect kick — gemini.connect already resolves on
+    // setupComplete, so a long timeout here adds dead time the user
+    // hears as silence after handoff. 50ms is enough to let the WS
+    // frame settle. Bundling lang + start into ONE realtimeInput.text
+    // (single message) avoids the model processing them as two
+    // separate user inputs (which would queue two response cycles).
     setTimeout(() => {
-      // Tell the framework which language to respond in BEFORE the
-      // start signal — otherwise the opening greeting can land in
-      // the wrong language.
-      gemini?.sendText(`[CMD:lang:${langBase}]`);
-      gemini?.sendText('[CMD:start]');
+      gemini?.sendText(`[CMD:lang:${langBase}] [CMD:start]`);
       log(`-> [CMD:lang:${langBase}] [CMD:start]`);
-    }, 300);
+    }, 50);
 
     // Deduct one credit on successful start. Fire-and-forget — the chip
     // will reflect the new balance once /wallet/deduct returns. Server
