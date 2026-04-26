@@ -585,6 +585,7 @@ const $reflectForm = document.getElementById('reflect-form');
 const $reflectEmail = document.getElementById('reflect-email');
 const $reflectSubmit = document.querySelector('.reflect-submit');
 const $reflectTertiary = document.getElementById('reflect-tertiary');
+const $reflectConcierge = document.getElementById('reflect-concierge');
 const $reflectHome = document.getElementById('reflect-home');
 const $tUser = document.getElementById('t-user');
 const $tModel = document.getElementById('t-model');
@@ -656,6 +657,8 @@ document.getElementById('end-session').addEventListener('click', endSession);
 $reflectForm.addEventListener('submit', onReflectionSubmit);
 // Start another → re-enters the same character the previous session used
 $reflectTertiary.addEventListener('click', () => activate(_lastFrameworkId));
+// Talk to concierge → return to the routing front-door, pick a different module
+$reflectConcierge?.addEventListener('click', () => activate('concierge'));
 $reflectHome.addEventListener('click', dismissReflection);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state === 'reflecting') dismissReflection();
