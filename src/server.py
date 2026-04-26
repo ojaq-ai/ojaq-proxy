@@ -448,16 +448,20 @@ Modules:
 Conversation so far (chronological):
 {history}
 
-A routing decision has been reached when EITHER:
-  - The user has assented to entering a specific module (in any
-    language, any phrasing — explicit yes, enthusiastic match,
-    naming a module by name, etc.).
-  - The Concierge has stated it is transitioning the user
-    (in any language, any phrasing) — this implies the user
-    already agreed in audio you may not have a transcript for.
+A decision has been reached in one of these shapes:
 
-Otherwise the conversation is still in intake — the user is
-exploring, asking, vague, or hasn't responded yet.
+  ROUTE — the user has assented to entering a specific module (in
+  any language, any phrasing), OR the Concierge has stated it is
+  transitioning the user.
+
+  END — the user has indicated they're done for now (in any
+  language: "I'm good", "that's all", "tamam", "yeter", "kapatalım",
+  a soft goodbye, etc.) AND the Concierge has acknowledged it
+  rather than offered another module. This usually happens after
+  the user has just finished a module session.
+
+  WAIT — anything else: still exploring, asking, vague, or no
+  response yet.
 
 Confidence reflects how unambiguous the agreement is, not how
 willing you are to act. Strong explicit assent: 0.85+. Implied or
@@ -470,6 +474,7 @@ Concierge depends on you to fire.
 OUTPUT — strict JSON, no markdown, no commentary:
   {{"action": "wait"}}
   {{"action": "route", "module_id": "<id>", "confidence": 0.0..1.0}}
+  {{"action": "end", "confidence": 0.0..1.0}}
 """
 
 
@@ -514,19 +519,21 @@ async def room_observe(request: Request):
             if text.endswith("```"):
                 text = text[:-3]
             decision = json.loads(text.strip())
-            # Defensive: gate on confidence + valid module_id.
-            # 0.4 floor (was 0.5) — observer was too cautious, leaving
-            # users repeatedly confirming for transitions that should
-            # have fired. With the strengthened prompt + few-shot
-            # examples, sub-0.4 is genuinely uncertain; sub-0.4-route
-            # gets collapsed to wait.
-            if decision.get("action") == "route":
+            # Defensive gates — anything below 0.4 confidence collapses
+            # to wait, no matter the action label, so the routing/ending
+            # action only fires on clear signal.
+            action = decision.get("action")
+            if action == "route":
                 conf = float(decision.get("confidence", 0))
                 mid = decision.get("module_id", "")
                 if conf < 0.4 or mid not in {
                     "coaching", "selfDiscovery", "friend",
                     "meditation", "voice", "together",
                 }:
+                    return JSONResponse({"action": "wait"})
+            elif action == "end":
+                conf = float(decision.get("confidence", 0))
+                if conf < 0.4:
                     return JSONResponse({"action": "wait"})
             return JSONResponse(decision)
         except Exception as e:

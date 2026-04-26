@@ -388,6 +388,10 @@ async function observeRoom(history) {
       log(`room presence: route -> ${d.module_id} (conf=${conf})`);
       _pendingTransition = d.module_id;
       handoffTo(d.module_id);
+    } else if (d?.action === 'end') {
+      const conf = (d.confidence ?? 0).toFixed(2);
+      log(`room presence: end (conf=${conf})`);
+      returnToLanding();
     } else if (d?.action === 'wait') {
       log('room presence: wait');
     } else {
@@ -427,24 +431,55 @@ async function analyzePresence(userText, modelText) {
 
 function endSession() {
   if (state !== 'active') return;
-  state = 'reflecting';
-  // Capture summary inputs BEFORE teardownVoice clears state
+
+  // Ending FROM concierge → drop straight to landing. Concierge is the
+  // wrap-up presence; once the user is closing it, there's nothing more
+  // for the room to do.
+  if (_lastFrameworkId === 'concierge') {
+    returnToLanding();
+    return;
+  }
+
+  // Ending FROM a module → flow back to concierge with module-completion
+  // context so it can ask "how did that land?" and either close warmly
+  // or route to a new module based on what surfaces. Reflection screen
+  // is no longer triggered here — the concierge IS the reflection.
   const durationMs = sessionStartedAt ? Date.now() - sessionStartedAt : 0;
   const summarySignal = lastSignal;
+  const minutes = Math.max(1, Math.round(durationMs / 60000));
+  const fromName = FRAMEWORKS[_lastFrameworkId]?.name || 'a session';
+  const moduleContext =
+    `PRIOR SESSION JUST ENDED: ${fromName} (~${minutes} minute${minutes === 1 ? '' : 's'}).\n` +
+    `Last observed signal: "${summarySignal || '(none)'}".\n` +
+    `The user has come back to you. Greet by asking how that landed — ` +
+    `then either let them close or route them to a new module.`;
+  log(`session end -> concierge (from ${_lastFrameworkId}, ${minutes}m, signal="${(summarySignal||'').slice(0,40)}")`);
+  handoffTo('concierge', moduleContext);
+}
+
+// Hard return to landing — used when concierge wraps up the user. Same
+// chrome-restoration as dismissReflection but skips the reflection
+// reset since we never showed the reflection screen.
+function returnToLanding() {
+  if (state === 'idle') return;
+  state = 'idle';
+  if (reflectionRevealTimer) { clearTimeout(reflectionRevealTimer); reflectionRevealTimer = null; }
+  setBodyState('idle');
+  setFrameworkClass(null);
+  billing.setSessionActive(false);
   teardownVoice();
-  setBodyState('reflecting');
-  $modalitiesList?.querySelectorAll('.modality').forEach((b) => b.classList.remove('active'));
-  // Keep the auth chip suppressed through the reflection moment too —
-  // it's uncluttered intentionally. Restored in dismissReflection.
-  avatar.settleToRest(1200);
+  avatar.setPresence(IDLE_PRESENCE);
+  avatar.setMode('hold');
+  avatar.setDepth(0);
+  if ($topicsHeader) $topicsHeader.textContent = '';
+  if ($modalitiesList) $modalitiesList.replaceChildren();
   resetReflection();
-  renderReflectionSummary(summarySignal, durationMs);
-  log(`reflection began (signal="${summarySignal.slice(0, 40)}…" duration=${Math.round(durationMs / 1000)}s)`);
-  // Brief pause then reveal the soft offer — quicker than the prior 2s,
-  // still long enough to feel like a breath rather than a snap.
-  reflectionRevealTimer = setTimeout(() => {
-    if (state === 'reflecting') document.body.classList.add('reflection-visible');
-  }, 700);
+  window.scrollTo(0, 0);
+  if (_historyPushed) {
+    _historyPushed = false;
+    history.back();
+  }
+  log('returned to landing');
 }
 
 // Concierge → module hand-off. Ceremonial transition:
@@ -456,7 +491,7 @@ function endSession() {
 //   5. Module's modality rail fades in (CSS via framework class)
 // The user sees the orb stay alive throughout — the soul changes,
 // not the body.
-async function handoffTo(targetFrameworkId) {
+async function handoffTo(targetFrameworkId, customContext = null) {
   if (state !== 'active') return;
   const target = FRAMEWORKS[targetFrameworkId];
   if (!target) { log(`unknown handoff target: ${targetFrameworkId}`); return; }
@@ -479,10 +514,14 @@ async function handoffTo(targetFrameworkId) {
   // visible into the first ~1.5s of the new session as an orientation cue.
   showHandoffCaption(target.name);
 
-  // Build a context snippet from the concierge's last few turns so the
-  // module picks up the thread instead of starting from zero.
-  let contextSnippet = '';
-  if (fromId === 'concierge' && _conciergeHistory.length) {
+  // Context priority:
+  //   1. customContext (explicit) — used when ending a module and
+  //      handing back to the Concierge with a session summary.
+  //   2. _conciergeHistory tail — used when going FROM concierge TO
+  //      a module so the module picks up the thread.
+  //   3. None — first activation, or a chip-click bypassing concierge.
+  let contextSnippet = customContext || '';
+  if (!contextSnippet && fromId === 'concierge' && _conciergeHistory.length) {
     contextSnippet = _conciergeHistory.slice(-6).map(t =>
       `${t.role === 'user' ? 'User' : 'Concierge'}: ${t.text}`
     ).join('\n');
