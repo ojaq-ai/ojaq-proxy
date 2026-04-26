@@ -474,13 +474,35 @@ DECISION SHAPES
   If you cannot identify which specific module the user is
   agreeing to, return wait — the user needs to be asked.
 
-  END — valid in any framework.
-  In concierge: the user's most recent turn signals they're done
-  for now (any language, any phrasing — "I'm good", "tamam, yeter",
-  soft goodbye), AND no new need is being raised.
-  In a module: the user's most recent turn signals THIS session
-  is wrapping up — closing-shaped, not mid-thought. Pulling them
-  out mid-work is expensive; only fire on clear closure.
+  END — valid in any framework. Pulling a user out mid-conversation
+  is the most expensive false positive in this system. End requires
+  TWO concurrent signals, not one:
+
+  In concierge:
+    (a) The user's most recent turn is an unambiguous close —
+        gratitude, soft goodbye, "I'm done for now", summary-shaped.
+    AND
+    (b) Ojaq's most recent turn acknowledges the close, not opens
+        a new question or invitation.
+
+  In a module:
+    Same two-signal rule, with extra care:
+    (a) The user's most recent turn must be SESSION-CLOSING in shape:
+        gratitude, "this was helpful", "I think I'm good for now",
+        a settled goodbye. NOT a decisive content statement
+        ("Yes I'll do that"), NOT a confident answer to a coaching
+        question, NOT a moment of insight. Decisive language inside
+        the work is not closure — it's progress.
+    AND
+    (b) Ojaq's most recent turn closes too — saying goodbye, warm
+        acknowledgment, no further question or push deeper. If Ojaq
+        is asking the next question, the session is continuing
+        regardless of what the user just said.
+
+  When in doubt about whether a user statement is closing or
+  in-the-work, return wait. The user can press the Done button
+  if they actually meant to leave; the cost of waiting one more
+  turn is low. The cost of pulling them out wrongly is high.
 
   WAIT — the default. Anything that isn't unambiguous user assent
   or closure: keep waiting. Questions, hesitation, vague gestures,
