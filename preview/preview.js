@@ -392,6 +392,15 @@ async function observeRoom(history, currentFrameworkId) {
       return;
     }
     const d = await r.json();
+    // Post-fetch staleness guard. The fetch took ~1s; in that time
+    // state could have flipped to idle (user pressed Done, another
+    // observe already routed, etc.) or _lastFrameworkId could have
+    // changed (a faster-fired handoff). Acting on a stale verdict
+    // double-fires actions like end → returnToLanding.
+    if (state !== 'active' || _lastFrameworkId !== currentFrameworkId) {
+      log('observe stale — discarding');
+      return;
+    }
     if (d?.action === 'route' && d?.module_id && FRAMEWORKS[d.module_id]) {
       const conf = (d.confidence ?? 0).toFixed(2);
       log(`room presence: route -> ${d.module_id} (conf=${conf})`);
