@@ -239,12 +239,45 @@ body.session-active.framework-concierge #modules-nav {
   pointer-events: auto;
 }
 
-/* Optional cross-fade hint during a concierge → module hand-off.
-   The body class is added/removed in handoffTo for the brief gap
-   between teardown and reconnect. */
+/* Concierge → module hand-off — orb breathes lightly while the soul
+   inside it changes (Gemini disconnects + reconnects with new prompt).
+   ~800ms gap, masked by hue tween + caption fade-in. */
 body.session-transitioning .orb-backdrop {
-  filter: blur(1.5px);
-  transition: filter 200ms ease;
+  filter: blur(2px);
+  transition: filter 600ms ease;
+}
+
+/* Module nav rail fades out during transition so it's gone by the
+   time the new framework's left-side modality rail appears. */
+body.session-transitioning #modules-nav {
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+/* Hand-off caption — "Coaching" / "Meditation" / etc. flashes
+   centered above the orb during the transition gap. Quiet,
+   ceremonial, fades back out once the new framework's greeting
+   starts speaking. */
+#handoff-caption {
+  position: fixed;
+  top: 32%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: inherit;
+  font-size: clamp(20px, 2.4vw, 28px);
+  font-weight: 200;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 30;
+  transition: opacity 600ms ease;
+  text-shadow: 0 0 24px rgba(184, 160, 255, 0.35);
+}
+
+#handoff-caption.visible {
+  opacity: 0.75;
 }
 
 /* ── End session button (only visible while session active) ───────────── */

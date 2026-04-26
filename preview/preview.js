@@ -212,27 +212,25 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     };
     gemini.onOutputTranscript = (t) => {
       lastModelText += t;
-      // Concierge route: when the model emits [CMD:open:<id>], intercept
-      // BEFORE we strip it. The marker is the contract for "user picked
-      // a module, transition now". Match across the buffer so we catch
-      // it even if streamed in pieces.
-      if (framework.id === 'concierge') {
-        const m = lastModelText.match(/\[CMD:open:([a-zA-Z]+)\]/);
-        if (m) {
-          const targetId = m[1];
-          if (FRAMEWORKS[targetId]) {
-            log(`concierge -> ${targetId}`);
-            // Defer the transition to after the current turn finishes
-            // speaking — a user-perceptible "let me hand you over" line
-            // wraps up first, then we tear down + reconnect.
-            _pendingTransition = targetId;
-          }
-        }
-      }
-      // Strip any leaked structured marker — [CMD:...], [PROSODY_REPORT:...],
-      // any future [XXX:...] — before display + before /analyze sees them.
+      // Strip any leaked structured marker — [CMD:...], any future
+      // [XXX:...] — before display + before /analyze sees them.
       lastModelText = lastModelText.replace(/\[[A-Z_]+:[^\]]*\]/g, '').trim();
       $tModel.textContent = lastModelText;
+    };
+    // Tool calls — concierge uses route_to_module(module_id) to hand
+    // off. We defer the actual transition to turnComplete so the
+    // user hears the model's closing line first.
+    gemini.onToolCall = (name, args, id) => {
+      if (name === 'route_to_module' && framework.id === 'concierge') {
+        const targetId = args?.module_id;
+        if (targetId && FRAMEWORKS[targetId]) {
+          log(`tool: route_to_module(${targetId})`);
+          _pendingTransition = targetId;
+        } else {
+          log(`tool: route_to_module(?) — invalid module_id: ${targetId}`);
+        }
+        gemini.respondToTool(name, id);
+      }
     };
     gemini.onTurnComplete = () => {
       // Async presence — never blocks the audio path
@@ -253,8 +251,10 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     };
 
     const prompt = assemblePrompt(framework);
-    await gemini.connect(prompt, [], userLanguage);
-    log(`gemini connected (lang=${userLanguage})`);
+    // Pass framework-specific tools (concierge uses route_to_module).
+    const tools = Array.isArray(framework.tools) ? framework.tools : [];
+    await gemini.connect(prompt, tools, userLanguage);
+    log(`gemini connected (lang=${userLanguage}, tools=${tools.length})`);
 
     player = new AudioPlayer();
     player.init();
@@ -397,24 +397,68 @@ function endSession() {
   }, 700);
 }
 
-// Concierge → module hand-off. Tears down the concierge session and
-// activates the chosen module while keeping the body in 'active' state
-// throughout — user sees the orb cross-fade hue, no return to landing.
+// Concierge → module hand-off. Ceremonial transition:
+//   1. Orb hue cross-fades to target framework's color (avatar already
+//      supports speakerColor tween — we hijack it as a transition tint)
+//   2. Modules nav rail fades out (CSS via body class change)
+//   3. Brief "going to <Module>" caption flashes
+//   4. Gemini disconnects, brief beat, reconnects with new framework
+//   5. Module's modality rail fades in (CSS via framework class)
+// The user sees the orb stay alive throughout — the soul changes,
+// not the body.
 async function handoffTo(targetFrameworkId) {
   if (state !== 'active') return;
   const target = FRAMEWORKS[targetFrameworkId];
   if (!target) { log(`unknown handoff target: ${targetFrameworkId}`); return; }
+  const fromName = framework?.name || 'Concierge';
   log(`handoff: ${framework?.id || 'concierge'} -> ${targetFrameworkId}`);
-  // Briefly mark a transition for CSS cross-fade (orb stays sharpened)
+
+  // Mark transition state for CSS cross-fade
   document.body.classList.add('session-transitioning');
+  // Tease the target framework's hue NOW so the orb starts shifting
+  // BEFORE the new connection lands — masks the audio gap.
+  if (target.color) {
+    avatar.setSpeakerColor(target.color, 900);
+  }
+  // Caption reveal — module name fades in mid-transition
+  showHandoffCaption(target.name);
+
   teardownVoice();
   $modalitiesList?.replaceChildren();
   if ($topicsHeader) $topicsHeader.textContent = '';
-  state = 'idle'; // unlocks activate(...) below
-  // Tiny delay so the teardown's WS close fully resolves before connect
-  await new Promise(r => setTimeout(r, 200));
+  state = 'idle';
+
+  // 800ms hold so the visual transition feels deliberate, not jarring,
+  // and gives the prior turn's audio a beat to land before the new
+  // greeting starts.
+  await new Promise(r => setTimeout(r, 800));
+
   document.body.classList.remove('session-transitioning');
   await activate(targetFrameworkId);
+  hideHandoffCaption();
+  // After connect, clear the speakerColor tease — the new framework
+  // takes over emotion-driven hue from here.
+  setTimeout(() => avatar.setSpeakerColor(null, 600), 1200);
+}
+
+// Brief on-screen caption that flashes the target module name during
+// the hand-off — gives the user a tactile sense of "passing through".
+function showHandoffCaption(name) {
+  let cap = document.getElementById('handoff-caption');
+  if (!cap) {
+    cap = document.createElement('div');
+    cap.id = 'handoff-caption';
+    document.body.appendChild(cap);
+  }
+  cap.textContent = name;
+  // Reflow so the CSS transition triggers
+  void cap.offsetWidth;
+  cap.classList.add('visible');
+}
+
+function hideHandoffCaption() {
+  const cap = document.getElementById('handoff-caption');
+  if (cap) cap.classList.remove('visible');
 }
 
 function dismissReflection() {
