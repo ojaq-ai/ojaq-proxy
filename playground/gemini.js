@@ -28,17 +28,24 @@ export class GeminiConnection {
     const { token } = await resp.json();
 
     return new Promise((resolve, reject) => {
+      const t0 = performance.now();
       this.ws = new WebSocket(`${GEMINI_WS}?key=${token}`);
       this.ws.binaryType = 'arraybuffer';
       let resolved = false;
-      // Hard timeout — if neither onopen nor onmessage delivers
-      // setupComplete within 10s, surface as an error instead of
-      // hanging the activate() flow indefinitely.
+      let opened = false;
+      // 20s ceiling. Gemini Live's setupComplete usually lands within
+      // 1-3s; pushing to 20s gives headroom for transient regional
+      // backend slowness without hanging the UI indefinitely.
       const timeout = setTimeout(() => {
-        if (!resolved) reject(new Error('gemini setup timeout (10s)'));
-      }, 10_000);
+        if (!resolved) {
+          const elapsed = Math.round(performance.now() - t0);
+          reject(new Error(`gemini setup timeout (${elapsed}ms, ws_opened=${opened})`));
+        }
+      }, 20_000);
 
       this.ws.onopen = () => {
+        opened = true;
+        console.log(`[gemini] ws opened in ${Math.round(performance.now() - t0)}ms`);
         const setup = {
           model: MODEL,
           generationConfig: {
@@ -56,7 +63,9 @@ export class GeminiConnection {
           sessionResumption: this.resumeHandle ? { handle: this.resumeHandle } : {},
         };
         if (tools.length) setup.tools = tools;
-        this.ws.send(JSON.stringify({ setup }));
+        const setupJson = JSON.stringify({ setup });
+        console.log(`[gemini] sending setup (${setupJson.length} bytes, prompt=${systemPrompt.length} chars)`);
+        this.ws.send(setupJson);
       };
 
       this.ws.onmessage = (e) => {
@@ -69,6 +78,7 @@ export class GeminiConnection {
         if (msg.setupComplete != null) {
           resolved = true;
           clearTimeout(timeout);
+          console.log(`[gemini] setupComplete in ${Math.round(performance.now() - t0)}ms`);
           resolve();
           return;
         }
