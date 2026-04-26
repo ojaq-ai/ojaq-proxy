@@ -85,8 +85,8 @@ class CheckoutRequest(BaseModel):
 
 
 # Whitelist of allowed post-checkout return paths. Anything else falls back
-# to /playground/ — prevents open-redirect via Stripe success_url.
-_ALLOWED_RETURN_PATHS = {"/playground/", "/preview/"}
+# to / — prevents open-redirect via Stripe success_url.
+_ALLOWED_RETURN_PATHS = {"/", "/playground/", "/preview/"}
 
 
 @router.post("/stripe/checkout")
@@ -110,10 +110,10 @@ async def checkout(req: CheckoutRequest, request: Request):
     # Normalize and whitelist the return path so the Stripe success_url
     # always points to a known surface, not an attacker-supplied path.
     rp = (req.return_path or "").strip()
-    if not rp.endswith("/"):
+    if rp != "/" and not rp.endswith("/"):
         rp += "/"
     if rp not in _ALLOWED_RETURN_PATHS:
-        rp = "/playground/"
+        rp = "/"  # default landing back to the new home
 
     stripe.api_key = _STRIPE_SECRET_KEY
     try:

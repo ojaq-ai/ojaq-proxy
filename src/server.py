@@ -23,6 +23,7 @@ PORT = int(os.getenv("PORT", "8000"))
 _ROOT = Path(__file__).resolve().parent.parent
 TEST_HTML = _ROOT / "test_browser" / "index.html"
 LANDING_HTML = _ROOT / "landing" / "index.html"
+HOME_HTML    = _ROOT / "preview" / "index.html"  # / serves the one-page concierge experience now
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
@@ -48,7 +49,17 @@ app = FastAPI(title="ojaq-proxy")
 
 
 @app.get("/")
-async def landing_page():
+async def home_page():
+    """Serves the concierge-led one-page experience (formerly /preview).
+    Same file is also reachable at /preview/ via the static mount, so
+    bookmarks/links to /preview/ keep working during the transition."""
+    return FileResponse(HOME_HTML, media_type="text/html")
+
+
+@app.get("/landing-old")
+async def legacy_landing():
+    """Keeps the original marketing landing reachable for reference /
+    rollback. Not linked from anywhere in the new flow."""
     return FileResponse(LANDING_HTML, media_type="text/html")
 
 
