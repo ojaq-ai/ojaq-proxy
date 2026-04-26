@@ -352,8 +352,12 @@ function blendPresence(newP) {
 // a module. This is the META-intelligence: separate from the Concierge
 // (who speaks) and the Avatar (who breathes). Same per-turn cadence
 // as analyzePresence, never blocks the audio path.
+//
+// Uses module-level _lastFrameworkId rather than the activate() closure
+// `framework` because observeRoom is defined at module scope; the
+// closure variable isn't in its lexical scope.
 async function observeRoom(history) {
-  if (state !== 'active' || framework?.id !== 'concierge') return;
+  if (state !== 'active' || _lastFrameworkId !== 'concierge') return;
   try {
     const r = await fetch('/room/observe', {
       method: 'POST',
