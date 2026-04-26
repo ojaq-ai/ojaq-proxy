@@ -71,9 +71,15 @@ let sessionStartedAt = 0;
 let _lastFrameworkId = 'coaching';
 // Throttle emotion logs — only print when the label changes
 let _lastEmotionLabel = null;
-// Concierge → module hand-off: parsed from [CMD:open:<id>] in the model's
-// current turn output, applied at turnComplete.
+// Concierge → module hand-off — set by either:
+//   (a) the room presence observer (POST /room/observe)
+//   (b) a direct module-chip click during concierge
+// Applied at the next turnComplete so the concierge's closing line
+// has time to land before we tear down.
 let _pendingTransition = null;
+// Rolling dialog history fed to the room presence observer. Cleared
+// when a session ends or hands off.
+let _conciergeHistory = [];
 
 // Idle preset: low energy + low engagement keep the orb's drift slow and
 // meditative. The hero shouldn't feel like a busy screensaver while users
@@ -180,6 +186,7 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     _smoothedPresence = null;
     lastSignal = '';
     sessionStartedAt = Date.now();
+    _conciergeHistory = [];
     avatar.setMode('reflect');
     avatar.setPresence(SESSION_START_PRESENCE);
     if ($topicsHeader) $topicsHeader.textContent = framework.name;
@@ -217,25 +224,19 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       lastModelText = lastModelText.replace(/\[[A-Z_]+:[^\]]*\]/g, '').trim();
       $tModel.textContent = lastModelText;
     };
-    // Tool calls — concierge uses route_to_module(module_id) to hand
-    // off. We defer the actual transition to turnComplete so the
-    // user hears the model's closing line first.
-    gemini.onToolCall = (name, args, id) => {
-      if (name === 'route_to_module' && framework.id === 'concierge') {
-        const targetId = args?.module_id;
-        if (targetId && FRAMEWORKS[targetId]) {
-          log(`tool: route_to_module(${targetId})`);
-          _pendingTransition = targetId;
-        } else {
-          log(`tool: route_to_module(?) — invalid module_id: ${targetId}`);
-        }
-        gemini.respondToTool(name, id);
-      }
-    };
+    // No tool-call handler — routing decisions come from the room
+    // presence observer (POST /room/observe), not from the model.
+    // The model just talks; the meta-intelligence watches and routes.
     gemini.onTurnComplete = () => {
       // Async presence — never blocks the audio path
       const u = lastUserText, m = lastModelText;
       if (u) analyzePresence(u, m);
+      // Build dialog history for room observer (concierge only)
+      if (framework.id === 'concierge' && u) {
+        _conciergeHistory.push({ role: 'user', text: u });
+        if (m) _conciergeHistory.push({ role: 'ojaq', text: m });
+        observeRoom(_conciergeHistory.slice(-12));  // last 12 turns
+      }
       lastUserText = '';
       lastModelText = '';
       // Concierge handed off — turn is done, do the actual transition now
@@ -251,10 +252,8 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     };
 
     const prompt = assemblePrompt(framework);
-    // Pass framework-specific tools (concierge uses route_to_module).
-    const tools = Array.isArray(framework.tools) ? framework.tools : [];
-    await gemini.connect(prompt, tools, userLanguage);
-    log(`gemini connected (lang=${userLanguage}, tools=${tools.length})`);
+    await gemini.connect(prompt, [], userLanguage);
+    log(`gemini connected (lang=${userLanguage})`);
 
     player = new AudioPlayer();
     player.init();
@@ -346,6 +345,38 @@ function blendPresence(newP) {
     }
   }
   return { ..._smoothedPresence };
+}
+
+// Room presence observer — async, runs after each Concierge turn.
+// Watches the dialog and decides whether the user has agreed to enter
+// a module. This is the META-intelligence: separate from the Concierge
+// (who speaks) and the Avatar (who breathes). Same per-turn cadence
+// as analyzePresence, never blocks the audio path.
+async function observeRoom(history) {
+  if (state !== 'active' || framework?.id !== 'concierge') return;
+  try {
+    const r = await fetch('/room/observe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history }),
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d?.action === 'route' && d?.module_id && FRAMEWORKS[d.module_id]) {
+      const conf = (d.confidence ?? 0).toFixed(2);
+      log(`room presence: route -> ${d.module_id} (conf=${conf})`);
+      // Defer to turnComplete (already cleared, but the next iteration
+      // of onTurnComplete picks this up).
+      _pendingTransition = d.module_id;
+      // If we're already past turnComplete (no more ai turn coming),
+      // fire immediately.
+      handoffTo(d.module_id);
+    } else if (d?.action === 'wait') {
+      log('room presence: wait');
+    }
+  } catch {
+    // Silent — observer failure shouldn't disrupt the conversation
+  }
 }
 
 // Async presence analysis — runs parallel to the voice loop. Never awaited

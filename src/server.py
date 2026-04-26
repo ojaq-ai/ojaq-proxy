@@ -427,6 +427,105 @@ async def analyze_presence(request: Request):
     return JSONResponse({"error": "all models unavailable"}, 503)
 
 
+# ── Room presence — observes the conversation flow during Concierge ──
+# Concierge is a character; THIS is the meta-intelligence that watches
+# the whole exchange and decides whether to route to a module. Lives
+# alongside the spoken conversation, never participates — it just
+# watches and acts. Same async-per-turn cadence as /analyze.
+ROOM_OBSERVE_PROMPT = """\
+You are the Room Presence — a silent observer in Ojaq's entry room.
+The user is talking with the Concierge, who greets and routes to one
+of six modules. You watch the conversation and decide ONLY ONE thing:
+has the user agreed to enter a specific module yet?
+
+Modules:
+  coaching      — thinking through decisions, change, work, next steps
+  selfDiscovery — being mirrored without advice; observation, not direction
+  friend        — casual venting, decompressing, just being together
+  meditation    — settling, breath, body, stillness
+  voice         — vocal practice, presence, confidence in speech
+  together      — for two people who want a quiet witness
+
+CONVERSATION SO FAR (chronological):
+{history}
+
+DECISION RULES
+- Route ONLY when the user has clearly AGREED to enter a specific module.
+  Verbal agreement ("yes", "ok", "let's go", "tamam", "evet"), an
+  enthusiastic match ("that sounds right"), or an explicit request
+  ("take me to meditation") all count.
+- Be conservative. If you're unsure, "wait".
+- Don't route on the FIRST exchange. Give the concierge room to clarify.
+- If the user gives a clear ABSENT signal (silence, deflection, change
+  of subject), wait.
+- The user CAN bypass the concierge by clicking a chip directly; you
+  don't see those clicks, so don't worry about them.
+
+OUTPUT
+Strict JSON, no markdown, no explanation. One of:
+  {{"action": "wait"}}
+  {{"action": "route", "module_id": "<id>", "confidence": 0.0..1.0}}
+
+confidence ≥ 0.7 → strong agreement
+confidence 0.5-0.7 → likely but ambiguous (return only if you're
+                     willing to let the route fire)
+< 0.5 → use "wait" instead.
+"""
+
+
+@app.post("/room/observe")
+async def room_observe(request: Request):
+    body = await request.json()
+    history = body.get("history", [])  # [{"role": "user"|"ojaq", "text": "..."}]
+    if not isinstance(history, list) or not history:
+        return JSONResponse({"action": "wait"})
+
+    # Render history as plain dialog so the LLM doesn't need to
+    # interpret JSON — speech-shaped text is what it's good at.
+    rendered = "\n".join(
+        f"{('User' if t.get('role') == 'user' else 'Concierge')}: {t.get('text','').strip()}"
+        for t in history if t.get("text")
+    )
+    prompt = ROOM_OBSERVE_PROMPT.format(history=rendered)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
+    }
+
+    last_error = None
+    for model in _ANALYZE_MODELS:
+        try:
+            resp = await _http.post(
+                f"{_REST_BASE}{model}:generateContent?key={GEMINI_API_KEY}",
+                json=payload,
+            )
+            if resp.status_code == 503:
+                continue
+            data = resp.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            decision = json.loads(text.strip())
+            # Defensive: gate on confidence + valid module_id
+            if decision.get("action") == "route":
+                conf = float(decision.get("confidence", 0))
+                mid = decision.get("module_id", "")
+                if conf < 0.5 or mid not in {
+                    "coaching", "selfDiscovery", "friend",
+                    "meditation", "voice", "together",
+                }:
+                    return JSONResponse({"action": "wait"})
+            return JSONResponse(decision)
+        except Exception as e:
+            last_error = e
+            continue
+
+    logger.warning(f"/room/observe failed on all models: {last_error}")
+    return JSONResponse({"action": "wait"})
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()

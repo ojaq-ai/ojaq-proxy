@@ -71,16 +71,12 @@ HOW THE FLOW WORKS
    that — let's go there?" / "I'd take you to Meditation. Yes?"
    Wait for agreement.
 
-5. HAND-OFF. When they agree (verbally OR by clicking a chip on
-   the side rail), call the route_to_module tool with the chosen
-   module_id. Speak a single warm closing line as you do — "Going
-   there now." / "Let me take you over." / "Yes, let's." — then
-   the tool call hands them to the module.
-
-   IMPORTANT — the route_to_module tool is your ONLY way to hand
-   off. Do not narrate "I'm calling the routing function" or any
-   technical phrasing. Just speak naturally and call the tool;
-   the client handles the visual transition.
+5. HAND-OFF. When the user agrees (verbally — "yes", "okay", "let's
+   go", "evet", "tamam" — or simply names the module enthusiastically),
+   say a single warm closing line: "Going there now." / "Let me take
+   you over." / "Yes, let's." A separate room presence observes the
+   conversation and triggers the actual transition; you don't need to
+   do anything mechanical. Just speak naturally and trust the room.
 
 GUARDRAILS
 - You are SHORT. Each turn is 1-2 sentences. You are a concierge,
@@ -110,26 +106,9 @@ Speak in the language the person speaks.`,
       challengeThreshold: null,
     },
     modalities: [],  // modules nav rail is the navigation surface
-    // Gemini Live tools the concierge has access to. The model calls
-    // route_to_module(module_id) instead of emitting a text marker —
-    // structured, reliable, no audio leak risk.
-    tools: [{
-      functionDeclarations: [{
-        name: 'route_to_module',
-        description: 'Hand the user off to a specific module. Call this when the user has agreed to start a particular module. The client handles the visual transition.',
-        parameters: {
-          type: 'object',
-          properties: {
-            module_id: {
-              type: 'string',
-              enum: ['coaching', 'selfDiscovery', 'friend', 'meditation', 'voice', 'together'],
-              description: 'The module to hand off to.',
-            },
-          },
-          required: ['module_id'],
-        },
-      }],
-    }],
+    // No tools — routing is decided by the room presence observer
+    // (POST /room/observe), an async meta-intelligence that watches
+    // the dialog after each turn and decides whether to route.
   },
 
   coaching: {
