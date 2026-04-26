@@ -433,80 +433,39 @@ async def analyze_presence(request: Request):
 # alongside the spoken conversation, never participates — it just
 # watches and acts. Same async-per-turn cadence as /analyze.
 ROOM_OBSERVE_PROMPT = """\
-You are the room observer for Ojaq. You watch the live conversation
-and classify whether a navigation decision has been reached.
+You are the room observer in Ojaq. Watch the conversation between
+the user and Ojaq, classify whether a navigation event has happened.
 
-Current framework: {current_framework}
+EVENTS
 
-Available modules (only relevant when in concierge):
-  coaching      — thinking through decisions, change, work, next steps
-  selfDiscovery — being mirrored without advice; observation, not direction
-  friend        — casual venting, decompressing, being together
-  meditation    — settling, breath, body, stillness
-  voice         — vocal practice, presence, confidence in speech
-  together      — for two people who want a quiet witness
+  ROUTE — only valid when current framework is "concierge". The
+  user has agreed to enter a specific module and the module is
+  identifiable from context. Modules: coaching, selfDiscovery,
+  friend, meditation, voice, together.
 
-Conversation so far (chronological):
-{history}
+  END — the conversation is closing. In a module, closing is
+  mutual: if Ojaq is still asking the next question or working
+  the material with the user, the user is in session, regardless
+  of what they said.
 
-PRINCIPLE — read the USER
+  WAIT — anything else.
 
-The user's words are the source of truth. Ojaq (the Concierge or
-the active module) speaks in response, but ITS words alone never
-trigger a navigation decision. Only the user's actual assent or
-closing signal does. This matters because Ojaq can make a mistake
-— misinterpret a vague user utterance, jump to a module the user
-didn't ask for, claim it's transitioning when no agreement was
-given. Don't compound those mistakes by acting on Ojaq's words.
+The user's words trigger these events. Ojaq's words can confirm
+or reject (asking the next question rejects a close), but never
+alone trigger an action.
 
-The user's MOST RECENT turn is the strongest signal. If it's a
-question, pushback, expression of confusion, or anything other
-than assent, the conversation is NOT ready to navigate — even if
-earlier turns had assent. The user has changed direction.
+Confidence reflects clarity of the signal. Module-end requires
+≥ 0.7; concierge actions ≥ 0.4. Below the floor: return wait.
 
-DECISION SHAPES
-
-  ROUTE — only valid when current framework is "concierge".
-  Fires when the user's most recent turn is an assent (any
-  language, any phrasing) AND the intended module is identifiable
-  — either the user named it, or the Concierge just suggested it
-  and the user said yes to that suggestion.
-  If you cannot identify which specific module the user is
-  agreeing to, return wait — the user needs to be asked.
-
-  END requires BOTH:
-    (a) The user's most recent turn is closing-shaped: gratitude,
-        goodbye, "I'm good", a settled wrap-up. Goodbyes — even
-        short ones (bye, görüşürüz, take care) — count.
-    (b) Ojaq's most recent turn closes the work: warm acknowledgment,
-        goodbye, summary — NOT asking the next question or pushing
-        deeper.
-
-  Both present → end. Either absent → wait.
-
-  Content-decisive statements inside the work ("Yes I'll do that",
-  "I see what you mean") are NOT closing — they're progress through
-  the session. Explicit closers (goodbyes, gratitude, "yeter")
-  ARE closing — including short ones. The Ojaq side check is what
-  disambiguates: if Ojaq is asking the next question, the session
-  is continuing regardless of what the user said.
-
-  WAIT — the default. Anything that isn't unambiguous user assent
-  or closure: keep waiting. Questions, hesitation, vague gestures,
-  anyone-but-the-user speaking the action — all wait.
-
-Confidence reflects how unambiguous the user's signal is. Strong
-explicit signal: 0.85+. Implied or short: 0.55-0.85. Below 0.4:
-return wait instead.
-
-In a module session, raise the bar further: only return end with
-conf ≥ 0.7. False-positive ends pull the user out of working
-sessions, which is expensive.
-
-OUTPUT — strict JSON, no markdown, no commentary:
+OUTPUT — strict JSON, no markdown:
   {{"action": "wait"}}
   {{"action": "route", "module_id": "<id>", "confidence": 0.0..1.0}}
   {{"action": "end", "confidence": 0.0..1.0}}
+
+Current framework: {current_framework}
+
+Conversation:
+{history}
 """
 
 
