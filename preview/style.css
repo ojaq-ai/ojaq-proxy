@@ -121,25 +121,33 @@ body.session-reflecting .orb-backdrop {
   color: var(--accent);
 }
 
-/* Quiet bridge between the brand h1 and the verb chips — turns the page
-   into a literal answer: title states what Ojaq is, question prompts the
-   user, chips are the answers. Without it the chips read as a feature
-   menu rather than an invitation. */
-.hero-question {
-  font-size: clamp(14px, 1.4vw, 16px);
-  font-weight: 300;
-  color: var(--muted);
-  letter-spacing: 0.2px;
-  margin-top: 8px;
-  margin-bottom: 24px;
-  font-style: italic;
-  opacity: 0.85;
+/* Single Enter button — ceremonial. Replaces the prior 5/6 character
+   chips. The Concierge greets next, listens, and routes to a module. */
+.enter-btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  padding: 18px 56px;
+  border-radius: 60px;
+  border: 1px solid rgba(184, 160, 255, 0.55);
+  background: rgba(184, 160, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  margin-top: 20px;
+  transition: background 240ms ease, border-color 240ms ease, transform 240ms ease, box-shadow 240ms ease;
 }
+.enter-btn:hover {
+  background: rgba(184, 160, 255, 0.18);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(184, 160, 255, 0.18);
+}
+.enter-btn:active { transform: translateY(0); }
 
-/* Character grid — 5 single-line invitations. The verb itself describes
-   what the user needs right now; the underlying character (Coaching,
-   Meditation, etc.) is in title=  for hover and accessibility, but never
-   a visible second label. Reads like a quiet menu after the brand title. */
+/* Old character grid styles kept (no DOM uses them on this branch but
+   the JS handler still binds harmlessly to any future grid). */
 .character-grid {
   display: flex;
   flex-wrap: wrap;
@@ -147,29 +155,96 @@ body.session-reflecting .orb-backdrop {
   justify-content: center;
   max-width: 640px;
 }
-
 .character-btn {
   font-family: inherit;
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
   padding: 12px 22px;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(12, 12, 20, 0.45);
   color: var(--text);
   cursor: pointer;
-  transition: border-color 220ms ease, background 220ms ease, transform 220ms ease;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  white-space: nowrap;
+  transition: border-color 220ms ease, background 220ms ease;
 }
-
 .character-btn:hover {
   border-color: rgba(184, 160, 255, 0.5);
   background: rgba(184, 160, 255, 0.06);
-  transform: translateY(-1px);
+}
+
+/* Module nav rail — right side, visible only during the Concierge
+   session. User can click a module to skip the voice route, or wait for
+   the concierge to suggest one. Matches the modality-rail aesthetic. */
+#modules-nav {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 18;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.modules-nav-header {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(184, 160, 255, 0.08);
+  border: 1px solid rgba(184, 160, 255, 0.25);
+  text-align: center;
+  margin-bottom: 14px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.module-chip {
+  display: block;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  color: var(--muted);
+  background: rgba(8, 8, 12, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+.module-chip:hover {
+  color: var(--text);
+  border-color: rgba(184, 160, 255, 0.4);
+  background: rgba(184, 160, 255, 0.06);
+}
+
+/* Show the modules nav only when Concierge is the active framework.
+   The body class is added by JS in setBodyState/activate path. */
+body.session-active.framework-concierge #modules-nav {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Optional cross-fade hint during a concierge → module hand-off.
+   The body class is added/removed in handoffTo for the brief gap
+   between teardown and reconnect. */
+body.session-transitioning .orb-backdrop {
+  filter: blur(1.5px);
+  transition: filter 200ms ease;
 }
 
 /* ── End session button (only visible while session active) ───────────── */

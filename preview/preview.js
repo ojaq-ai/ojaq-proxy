@@ -71,6 +71,9 @@ let sessionStartedAt = 0;
 let _lastFrameworkId = 'coaching';
 // Throttle emotion logs — only print when the label changes
 let _lastEmotionLabel = null;
+// Concierge → module hand-off: parsed from [CMD:open:<id>] in the model's
+// current turn output, applied at turnComplete.
+let _pendingTransition = null;
 
 // Idle preset: low energy + low engagement keep the orb's drift slow and
 // meditative. The hero shouldn't feel like a busy screensaver while users
@@ -92,6 +95,16 @@ function setBodyState(target) {
   document.body.classList.remove('session-active', 'session-reflecting', 'reflection-visible');
   if (target === 'active') document.body.classList.add('session-active');
   else if (target === 'reflecting') document.body.classList.add('session-reflecting');
+}
+
+// Per-framework body class so CSS can show framework-specific UI
+// (e.g., the modules nav rail only during Concierge). Cleared on idle.
+function setFrameworkClass(id) {
+  // Strip any prior framework-* class
+  for (const c of [...document.body.classList]) {
+    if (c.startsWith('framework-')) document.body.classList.remove(c);
+  }
+  if (id) document.body.classList.add(`framework-${id}`);
 }
 
 async function activate(frameworkId = _lastFrameworkId || 'coaching') {
@@ -147,6 +160,7 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
 
   state = 'active';
   setBodyState('active');
+  setFrameworkClass(framework.id);
   billing.setSessionActive(true);
   // Snap to top so the orb is the only focal point — the editorial/nav are
   // visibility:hidden but laid out from the top, so without scrollTo the user
@@ -198,10 +212,25 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
     };
     gemini.onOutputTranscript = (t) => {
       lastModelText += t;
+      // Concierge route: when the model emits [CMD:open:<id>], intercept
+      // BEFORE we strip it. The marker is the contract for "user picked
+      // a module, transition now". Match across the buffer so we catch
+      // it even if streamed in pieces.
+      if (framework.id === 'concierge') {
+        const m = lastModelText.match(/\[CMD:open:([a-zA-Z]+)\]/);
+        if (m) {
+          const targetId = m[1];
+          if (FRAMEWORKS[targetId]) {
+            log(`concierge -> ${targetId}`);
+            // Defer the transition to after the current turn finishes
+            // speaking — a user-perceptible "let me hand you over" line
+            // wraps up first, then we tear down + reconnect.
+            _pendingTransition = targetId;
+          }
+        }
+      }
       // Strip any leaked structured marker — [CMD:...], [PROSODY_REPORT:...],
       // any future [XXX:...] — before display + before /analyze sees them.
-      // Models occasionally echo system markers verbatim; don't let that
-      // surface in the transcript or leak into downstream analysis.
       lastModelText = lastModelText.replace(/\[[A-Z_]+:[^\]]*\]/g, '').trim();
       $tModel.textContent = lastModelText;
     };
@@ -211,6 +240,12 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching') {
       if (u) analyzePresence(u, m);
       lastUserText = '';
       lastModelText = '';
+      // Concierge handed off — turn is done, do the actual transition now
+      if (_pendingTransition) {
+        const next = _pendingTransition;
+        _pendingTransition = null;
+        handoffTo(next);
+      }
     };
     gemini.onClose = (code, reason) => {
       log(`ws closed ${code} ${reason || ''}`);
@@ -362,11 +397,32 @@ function endSession() {
   }, 700);
 }
 
+// Concierge → module hand-off. Tears down the concierge session and
+// activates the chosen module while keeping the body in 'active' state
+// throughout — user sees the orb cross-fade hue, no return to landing.
+async function handoffTo(targetFrameworkId) {
+  if (state !== 'active') return;
+  const target = FRAMEWORKS[targetFrameworkId];
+  if (!target) { log(`unknown handoff target: ${targetFrameworkId}`); return; }
+  log(`handoff: ${framework?.id || 'concierge'} -> ${targetFrameworkId}`);
+  // Briefly mark a transition for CSS cross-fade (orb stays sharpened)
+  document.body.classList.add('session-transitioning');
+  teardownVoice();
+  $modalitiesList?.replaceChildren();
+  if ($topicsHeader) $topicsHeader.textContent = '';
+  state = 'idle'; // unlocks activate(...) below
+  // Tiny delay so the teardown's WS close fully resolves before connect
+  await new Promise(r => setTimeout(r, 200));
+  document.body.classList.remove('session-transitioning');
+  await activate(targetFrameworkId);
+}
+
 function dismissReflection() {
   if (state !== 'reflecting') return;
   state = 'idle';
   if (reflectionRevealTimer) { clearTimeout(reflectionRevealTimer); reflectionRevealTimer = null; }
   setBodyState('idle');
+  setFrameworkClass(null);           // hide modules nav etc.
   billing.setSessionActive(false);   // chip returns
   avatar.setPresence(IDLE_PRESENCE); // restore idle target so orbs resume natural drift
   avatar.setMode('hold');            // back to slow meditative drift
@@ -478,9 +534,31 @@ function selectModality(btn, m) {
 }
 
 // ── Wiring ───────────────────────────────────────────────────────────────
-// Each character button is its own session-start path — picking the
-// character IS the begin. The user's NEED is the entry point, not the
-// framework as a feature toggle.
+// Enter → Concierge. The concierge then routes to a module, either via
+// voice (it emits [CMD:open:<id>]) or via the user clicking a module
+// chip on the side rail (handoffTo).
+const $enterBtn = document.getElementById('enter-btn');
+$enterBtn?.addEventListener('click', () => activate('concierge'));
+
+// Module nav chips — visible during concierge session via CSS body class.
+// Click during concierge: hand off to that module (skip voice route).
+// Click outside concierge (e.g., direct deep-link): start that module
+// fresh, like the old chip-grid behavior.
+const $moduleChips = document.querySelectorAll('.module-chip[data-framework]');
+$moduleChips.forEach((b) => {
+  b.addEventListener('click', () => {
+    const targetId = b.dataset.framework;
+    if (state === 'active' && framework?.id === 'concierge') {
+      handoffTo(targetId);
+    } else {
+      activate(targetId);
+    }
+  });
+});
+
+// Backwards-compat: if the old .character-btn[data-framework] chips are
+// somewhere in the DOM (e.g. a future re-introduced grid), they still
+// work as direct module activators.
 $characterBtns.forEach((b) => {
   b.addEventListener('click', () => activate(b.dataset.framework));
 });

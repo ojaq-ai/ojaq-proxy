@@ -76,17 +76,22 @@
   </div>
   <div class="hero-content">
     <h1 class="hero-title">An intelligence that listens <em>beneath</em> your words.</h1>
-    <p class="hero-question">What do you need right now?</p>
-    <div class="character-grid">
-      <button class="character-btn" data-framework="coaching" type="button" title="Coaching">to figure something out</button>
-      <button class="character-btn" data-framework="selfDiscovery" type="button" title="Self-Discovery">to be heard</button>
-      <button class="character-btn" data-framework="friend" type="button" title="Friend">someone to be with</button>
-      <button class="character-btn" data-framework="meditation" type="button" title="Meditation">to settle</button>
-      <button class="character-btn" data-framework="voice" type="button" title="Voice">to find my voice</button>
-      <button class="character-btn" data-framework="together" type="button" title="Together">to be witnessed together</button>
-    </div>
+    <button id="enter-btn" class="enter-btn" type="button">Enter</button>
   </div>
 </main>
+
+<!-- Module navigation rail — visible during Concierge session.
+     Click a chip OR let Concierge route you via voice. Same id pattern
+     as the framework keys; preview.js routes via [CMD:open:<id>]. -->
+<aside id="modules-nav" aria-label="Modules">
+  <div class="modules-nav-header">Modules</div>
+  <button class="module-chip" data-framework="coaching"     type="button">Coaching</button>
+  <button class="module-chip" data-framework="selfDiscovery" type="button">Self-Discovery</button>
+  <button class="module-chip" data-framework="friend"        type="button">Friend</button>
+  <button class="module-chip" data-framework="meditation"    type="button">Meditation</button>
+  <button class="module-chip" data-framework="voice"         type="button">Voice</button>
+  <button class="module-chip" data-framework="together"      type="button">Together</button>
+</aside>
 
 <!-- Left rail — visible only during active session.
      Header pill shows the current character; modality buttons below are
