@@ -1,0 +1,1162 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  /* Aligned with production landing (/landing/index.html) */
+  --bg: #08080c;
+  --text: #e8e8f0;
+  --muted: #666680;
+  --line: #1a1a24;
+  --accent: #b8a0ff;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* ── nav (matches production landing dims) ──────────────────────────── */
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  position: relative;
+  z-index: 10;
+}
+
+.nav .brand {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--muted);
+  transition: color 200ms ease;
+}
+
+.nav .brand:hover { color: var(--text); }
+
+/* ── hero ────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  text-align: center;
+}
+
+/* Orb canvas fills the entire viewport. Earlier square version left visible
+   margins on the page edges and clipped orbs whose orbital radius reached
+   past the canvas — most noticeable on mobile. Fullscreen canvas gives
+   the orbs unbounded space and the hero feels framed by atmosphere rather
+   than by a 720px window inside it.
+   In session-active/reflecting, opacity + blur clear and the orb sharpens. */
+.orb-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.4;
+  filter: blur(3px);
+  pointer-events: none;
+  /* Lift the orb cluster above viewport center on landing so it sits
+     visually above the title — closes the empty gap between the Begin
+     button and the top of the page. Restored to 0 in session-active. */
+  transform: translateY(-7vh);
+  transition: opacity 700ms ease, filter 700ms ease, transform 700ms ease;
+}
+
+.orb-backdrop canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* When the user scrolls past the hero, the orb fades to near-invisible.
+   It's always behind the page (position:fixed) but shouldn't compete with
+   editorial reading. Restored to full presence on session start. */
+body.hero-out-of-view .orb-backdrop {
+  opacity: 0.06;
+}
+
+/* Session states override scroll-based fade — orb is THE focus there.
+   Also drops the landing-only upward lift so the orb sits at true center. */
+body.session-active .orb-backdrop,
+body.session-reflecting .orb-backdrop {
+  opacity: 1 !important;
+  filter: none;
+  transform: translateY(0);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 640px;
+}
+
+.hero-title {
+  font-size: clamp(32px, 6vw, 56px);
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+  margin-bottom: 24px;
+}
+
+.hero-title em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+/* Single Enter button — ceremonial. Replaces the prior 5/6 character
+   chips. The Concierge greets next, listens, and routes to a module. */
+.enter-btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  padding: 18px 56px;
+  border-radius: 60px;
+  border: 1px solid rgba(184, 160, 255, 0.55);
+  background: rgba(184, 160, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  margin-top: 20px;
+  transition: background 240ms ease, border-color 240ms ease, transform 240ms ease, box-shadow 240ms ease;
+}
+.enter-btn:hover {
+  background: rgba(184, 160, 255, 0.18);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(184, 160, 255, 0.18);
+}
+.enter-btn:active { transform: translateY(0); }
+
+/* Old character grid styles kept (no DOM uses them on this branch but
+   the JS handler still binds harmlessly to any future grid). */
+.character-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  max-width: 640px;
+}
+.character-btn {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 12px 22px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(12, 12, 20, 0.45);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 220ms ease, background 220ms ease;
+}
+.character-btn:hover {
+  border-color: rgba(184, 160, 255, 0.5);
+  background: rgba(184, 160, 255, 0.06);
+}
+
+/* Module nav rail — right side, visible only during the Concierge
+   session. User can click a module to skip the voice route, or wait for
+   the concierge to suggest one. Matches the modality-rail aesthetic. */
+#modules-nav {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 18;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.modules-nav-header {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(184, 160, 255, 0.08);
+  border: 1px solid rgba(184, 160, 255, 0.25);
+  text-align: center;
+  margin-bottom: 14px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.module-chip {
+  display: block;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  color: var(--muted);
+  background: rgba(8, 8, 12, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+.module-chip:hover {
+  color: var(--text);
+  border-color: rgba(184, 160, 255, 0.4);
+  background: rgba(184, 160, 255, 0.06);
+}
+
+/* Show the modules nav only when Concierge is the active framework.
+   The body class is added by JS in setBodyState/activate path. */
+body.session-active.framework-concierge #modules-nav {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Concierge → module hand-off — quick visual handshake. ~250ms hold
+   plus gemini connect (~600-1000ms cold), masked by hue tween +
+   caption. Total perceived gap ~1s. */
+body.session-transitioning .orb-backdrop {
+  filter: blur(2px);
+  transition: filter 250ms ease;
+}
+
+/* Module nav rail fades out during transition so it's gone by the
+   time the new framework's left-side modality rail appears. */
+body.session-transitioning #modules-nav {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+/* Hand-off caption — module name flashes during the transition AND
+   persists ~1.5s into the new session as an orientation cue. Faster
+   in-fade, slower out-fade for a "settling" feel. */
+#handoff-caption {
+  position: fixed;
+  top: 28%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: inherit;
+  font-size: clamp(20px, 2.4vw, 28px);
+  font-weight: 200;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 30;
+  transition: opacity 800ms ease;  /* slower out for soft settle */
+  text-shadow: 0 0 24px rgba(184, 160, 255, 0.35);
+}
+
+#handoff-caption.visible {
+  opacity: 0.75;
+  transition: opacity 250ms ease;  /* fast in */
+}
+
+/* ── End session button (only visible while session active) ───────────── */
+.end-btn {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 32px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(7, 7, 11, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 32px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 500ms ease 200ms, color 200ms ease, border-color 200ms ease;
+  z-index: 20;
+}
+
+.end-btn:hover { color: var(--text); border-color: var(--muted); }
+
+/* ── Session state machine ───────────────────────────────────────────────
+   Three states on <body>: (none) idle, .session-active, .session-reflecting.
+
+   Active/reflecting: scroll locked. The nav (Ojaq + auth chip) stays — the
+   user always knows where they are and can sign in/out from the chip. Only
+   the editorial body, hero copy, and footer fade out, leaving the orb as
+   the focal point. Live transcripts fade in below the orb during active.
+   Visibility delay on hide preserves layout during the fade. */
+
+.hero-content,
+.editorial,
+footer {
+  transition: opacity 400ms ease, visibility 0s linear 0s;
+}
+
+body.session-active,
+body.session-reflecting {
+  overflow: hidden;
+}
+
+body.session-active .hero-content,
+body.session-active .editorial,
+body.session-active footer,
+body.session-reflecting .hero-content,
+body.session-reflecting .editorial,
+body.session-reflecting footer {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 400ms ease, visibility 0s linear 400ms;
+}
+
+body.session-active .end-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.session-reflecting .end-btn {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.session-active #transcripts {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 600ms ease 200ms;
+}
+
+body.session-active #topics {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 500ms ease 300ms;
+}
+
+/* ── Left rail (active session only) ─────────────────────────────────
+   Holds the character indicator pill + a vertical stack of modality
+   chips. Modalities are rendered per-character: each character has its
+   own DSL of "ways into the conversation" (Coach offers life domains,
+   Meditation offers practice forms, Friend offers tones). Chips are
+   text-only — modalities are described in words, not icons. */
+#topics {
+  position: fixed;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 18;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+  width: 180px;
+}
+
+/* Character indicator — sits above modalities so the user always knows
+   which character they're in mid-session. Hidden when empty. */
+.topics-header {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(184, 160, 255, 0.08);
+  border: 1px solid rgba(184, 160, 255, 0.25);
+  text-align: center;
+  margin-bottom: 14px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.topics-header:empty { display: none; }
+
+#modalities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modality {
+  display: block;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  color: var(--muted);
+  background: rgba(8, 8, 12, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+
+.modality:hover {
+  color: var(--text);
+  border-color: rgba(184, 160, 255, 0.4);
+  background: rgba(184, 160, 255, 0.06);
+}
+
+.modality.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(184, 160, 255, 0.1);
+}
+
+@media (max-width: 600px) {
+  #topics { left: 12px; width: 150px; }
+  .modality { font-size: 12px; padding: 7px 12px; }
+}
+
+/* ── Live transcripts (visible during active session only) ────────────
+   Two soft lines beneath the orb — last user utterance and last Ojaq
+   response. Async presence updates the orb in parallel; this is the
+   surface representation of what's flowing. */
+#transcripts {
+  position: fixed;
+  left: 50%;
+  bottom: 130px;
+  transform: translateX(-50%);
+  width: min(680px, 88vw);
+  text-align: center;
+  z-index: 15;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.t-line {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 10px;
+  min-height: 18px;
+  transition: color 400ms ease;
+}
+
+.t-line:last-child { margin-bottom: 0; }
+
+/* User line is captured for /analyze + conductor but not surfaced —
+   only Ojaq's voice is shown. The user's words are theirs to remember. */
+.t-line.you { display: none; }
+.t-line.ojaq { color: var(--accent); opacity: 0.85; }
+
+.reflection {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  max-width: 520px;
+  padding: 0 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 500ms ease;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* Reveal happens after the 2s hold via JS adding .reflection-visible */
+body.reflection-visible .reflection {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Session summary — latest presence signal from /analyze. The model's
+   single-sentence observation about what was alive in the conversation. */
+.reflect-signal {
+  font-size: 17px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 460px;
+  display: none;  /* JS shows when populated */
+}
+
+.reflect-duration {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+  display: none;  /* JS shows when >= 1 minute */
+}
+
+.reflect-line {
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: 0.2px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* When a signal IS shown, the static "Carry this with you" line softens
+   to a quieter follow-on (the signal is the focal sentence). */
+.reflect-signal:not([style*="display: none"]) ~ .reflect-line {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.reflect-form {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.reflect-form input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 18px;
+  border-radius: 32px;
+  border: 1px solid var(--line);
+  background: rgba(7, 7, 11, 0.7);
+  color: var(--text);
+  width: 240px;
+  outline: none;
+  text-align: center;
+  transition: border-color 200ms ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.reflect-form input:focus { border-color: var(--accent); }
+
+.reflect-submit {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 22px;
+  border-radius: 32px;
+  border: 1px solid var(--line);
+  background: rgba(7, 7, 11, 0.7);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.reflect-submit:hover { color: var(--text); border-color: var(--accent); }
+
+.reflect-actions {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.reflect-divider {
+  font-size: 13px;
+  color: var(--muted);
+  opacity: 0.4;
+  user-select: none;
+}
+
+.reflect-tertiary {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 200ms ease, border-color 200ms ease;
+}
+
+.reflect-tertiary:hover {
+  color: var(--text);
+  border-bottom-color: rgba(184, 160, 255, 0.4);
+}
+
+/* ── editorial sections (matches production landing dims) ────────────── */
+.editorial {
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.section {
+  padding: 120px 24px;
+}
+
+.kicker {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 24px;
+}
+
+.section h2 {
+  font-size: clamp(24px, 4vw, 40px);
+  font-weight: 300;
+  line-height: 1.3;
+  margin-bottom: 32px;
+}
+
+.section p {
+  font-size: 17px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.section p strong {
+  color: var(--text);
+  font-weight: 400;
+}
+
+.dialog {
+  margin-bottom: 32px;
+}
+.dialog p {
+  font-size: 17px;
+  font-weight: 300;
+  line-height: 1.6;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+.dialog .d-you { color: var(--muted); }
+.dialog .d-ojaq { color: var(--text); }
+
+/* ── packs (Founding Members) ────────────────────────────────────────── */
+.packs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 64px;
+}
+
+.pack {
+  padding: 36px 28px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(12, 12, 20, 0.5);
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
+}
+
+.pack:hover {
+  border-color: var(--accent);
+  background: rgba(20, 18, 30, 0.7);
+  transform: translateY(-2px);
+}
+
+.pack-name {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.pack-price {
+  font-size: 30px;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.pack-amount {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+
+.pack-desc {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.65;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ── waitlist (subordinate, mobile-launch capture) ───────────────────── */
+.waitlist-section {
+  text-align: center;
+  margin-top: 80px;
+  padding-top: 80px;
+  border-top: 1px solid var(--line);
+}
+
+.waitlist-heading {
+  font-size: clamp(18px, 2.5vw, 22px);
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  margin-bottom: 28px;
+  color: var(--text);
+}
+
+.waitlist-form {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.waitlist-form input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 12px 20px;
+  border-radius: 32px;
+  border: 1px solid var(--line);
+  background: rgba(7, 7, 11, 0.6);
+  color: var(--text);
+  width: 280px;
+  outline: none;
+  text-align: center;
+  transition: border-color 200ms ease;
+}
+
+.waitlist-form input:focus { border-color: var(--accent); }
+
+.waitlist-form button {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 12px 24px;
+  border-radius: 32px;
+  border: 1px solid var(--line);
+  background: rgba(7, 7, 11, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+}
+
+.waitlist-form button:hover { color: var(--text); border-color: var(--accent); }
+
+.waitlist-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ── footer ──────────────────────────────────────────────────────────── */
+footer {
+  text-align: center;
+  padding: 64px 40px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: #2a2a36;
+  border-top: 1px solid var(--line);
+}
+
+footer a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 200ms ease;
+}
+
+footer a:hover { color: var(--muted); }
+
+/* ── account chip — sits inline in the nav (right side) ─────────────── */
+#account-chip {
+  position: relative;
+  font-family: inherit;
+}
+#account-chip.hidden { display: none; }
+#account-btn {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(12, 12, 20, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+#account-btn:hover { color: var(--text); border-color: var(--accent); }
+#account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: rgba(12, 12, 20, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: none;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#account-menu.open { display: block; }
+#account-menu-email {
+  font-size: 12px;
+  color: var(--text);
+  margin: 0 0 4px;
+  word-break: break-all;
+  text-align: left;
+}
+#account-menu-credits {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 14px;
+  text-align: left;
+}
+#account-signout {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#account-signout:hover { color: var(--text); }
+
+/* Chip stays visible across all states — orientation matters during session */
+
+/* ── login modal ──────────────────────────────────────────────────────── */
+#login-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 8, 12, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+#login-inner {
+  text-align: center;
+  max-width: 380px;
+  padding: 0 24px;
+}
+#login-title {
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--text);
+  margin: 0 0 6px;
+  letter-spacing: 0.5px;
+}
+#login-sub {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--muted);
+  margin: 0 0 22px;
+  line-height: 1.5;
+}
+#login-email {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: 40px;
+  border: 1px solid #2a2a36;
+  background: rgba(12, 12, 20, 0.8);
+  color: var(--text);
+  width: 240px;
+  outline: none;
+  text-align: center;
+}
+#login-email:focus { border-color: var(--accent); }
+#login-note {
+  font-size: 12px;
+  color: var(--accent);
+  min-height: 18px;
+  margin-top: 10px;
+}
+#login-sent-msg {
+  font-size: 14px;
+  font-weight: 300;
+  color: rgba(200, 200, 210, 0.7);
+  margin: 0;
+  line-height: 1.6;
+}
+#login-close {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  margin-top: 28px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 200ms ease;
+}
+#login-close:hover { color: var(--text); }
+
+/* The login modal reuses the .reflect-input-row + .reflect-submit
+   pattern from /playground for the email + Send link row. */
+.reflect-input-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.reflect-submit {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  border-radius: 40px;
+  border: 1px solid #2a2a36;
+  background: rgba(12, 12, 20, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+  flex-shrink: 0;
+}
+.reflect-submit:hover { color: var(--text); border-color: var(--accent); }
+.reflect-submit:disabled { opacity: 0.4; cursor: default; }
+
+/* ── paywall modal — dormant in /preview, included so billing.init() finds DOM ── */
+#paywall-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 8, 12, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 24px;
+}
+#paywall-inner {
+  text-align: center;
+  max-width: 720px;
+  width: 100%;
+}
+#paywall-title {
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--text);
+  margin: 0 0 6px;
+  letter-spacing: 0.5px;
+}
+#paywall-sub {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--muted);
+  margin: 0 0 28px;
+}
+#paywall-packages {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+.paywall-pkg {
+  font-family: inherit;
+  flex: 1 1 200px;
+  max-width: 220px;
+  background: rgba(12, 12, 20, 0.7);
+  border: 1px solid #2a2a36;
+  border-radius: 14px;
+  padding: 22px 18px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+  color: var(--text);
+}
+.paywall-pkg:hover { border-color: var(--accent); background: rgba(20, 18, 30, 0.85); }
+.paywall-pkg:disabled { opacity: 0.4; cursor: default; }
+.paywall-pkg .pkg-name {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.paywall-pkg .pkg-price {
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: 0.5px;
+}
+.paywall-pkg .pkg-desc {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--muted);
+  line-height: 1.4;
+}
+#paywall-login-cta {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 20px;
+}
+#paywall-login-link {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+#paywall-login-link:hover { color: var(--accent); }
+#paywall-close {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 200ms ease;
+}
+#paywall-close:hover { color: var(--text); }
+
+/* ── responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .nav { padding: 20px 20px; }
+  .nav .brand { letter-spacing: 4px; }
+  .section { padding: 80px 20px; }
+  #transcripts { bottom: 110px; }
+  #paywall-packages { flex-direction: column; align-items: stretch; }
+  .paywall-pkg { max-width: none; }
+  .reflect-actions { flex-direction: column; gap: 6px; }
+  .reflect-divider { display: none; }
+  /* On phones the 5 character chips wouldn't tile cleanly (each ~150-180px
+     vs ~310px usable width) — stack them as a full-width single column so
+     each verb is its own thumb-sized line, evenly spaced. */
+  .character-grid { flex-direction: column; gap: 8px; max-width: none; width: 100%; }
+  .character-btn { width: 100%; white-space: normal; }
+
+  /* Mobile is voice-first. Both side rails (modules nav during concierge,
+     modality rail during a module) would smother the orb on a ~360px
+     screen — two ~150px-wide rails leave almost no breathing room. Hide
+     them and let voice navigation carry the flow. Orientation cue moves
+     to a small floating pill near the top of the screen. */
+  #modules-nav { display: none; }
+  #topics { display: none; }
+
+  /* Done button + reflection — respect iOS/Android safe-area at the
+     bottom so they don't get hidden behind the home indicator. */
+  .end-btn { bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+  .reflection { bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Handoff caption a little higher so it doesn't collide with the nav */
+  #handoff-caption { top: 24%; }
+}
+
+/* Mobile-only character pill — shows current framework name as a small
+   floating chip near the top of the screen. Replaces the rail's pill
+   on phones, where the rails are hidden. Empty by default; populated
+   by JS when a session activates. Hidden above 600px (rail does the job). */
+.mobile-character-pill {
+  display: none;
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+  padding: 5px 14px;
+  border-radius: 16px;
+  background: rgba(184, 160, 255, 0.08);
+  border: 1px solid rgba(184, 160, 255, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 18;
+  pointer-events: none;
+}
+.mobile-character-pill:empty { display: none !important; }
+@media (max-width: 600px) {
+  body.session-active .mobile-character-pill,
+  body.session-reflecting .mobile-character-pill {
+    display: block;
+  }
+}

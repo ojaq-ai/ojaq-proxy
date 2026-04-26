@@ -141,6 +141,12 @@ export function hidePaywall() {
   $paywall.style.display = 'none';
 }
 
+// Public — called from inside the paywall modal AND from any other surface
+// (e.g. /preview's editorial pack cards) that wants to start checkout.
+export async function startCheckout(packageId) {
+  return onPackageClick(packageId);
+}
+
 async function onPackageClick(packageId) {
   // Unauthed user must sign in before checkout — checkout requires a logged-in email
   if (!_state) {
@@ -155,7 +161,10 @@ async function onPackageClick(packageId) {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ package: packageId }),
+      // Pass the current path so Stripe's success/cancel URLs land back
+      // on the surface the buyer came from. Server whitelists this
+      // (/playground/, /preview/) and falls back to /playground/ otherwise.
+      body: JSON.stringify({ package: packageId, return_path: location.pathname }),
     });
     if (!r.ok) {
       log(`/stripe/checkout failed status=${r.status}`);

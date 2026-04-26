@@ -81,6 +81,12 @@ router = APIRouter()
 
 class CheckoutRequest(BaseModel):
     package: str  # "starter" | "ritual" | "evergreen"
+    return_path: str | None = None  # surface the buyer came from; whitelist-validated below
+
+
+# Whitelist of allowed post-checkout return paths. Anything else falls back
+# to / — prevents open-redirect via Stripe success_url.
+_ALLOWED_RETURN_PATHS = {"/", "/playground/", "/preview/"}
 
 
 @router.post("/stripe/checkout")
@@ -101,13 +107,21 @@ async def checkout(req: CheckoutRequest, request: Request):
     if stripe is None:
         return JSONResponse({"error": "stripe_package_missing"}, 503)
 
+    # Normalize and whitelist the return path so the Stripe success_url
+    # always points to a known surface, not an attacker-supplied path.
+    rp = (req.return_path or "").strip()
+    if rp != "/" and not rp.endswith("/"):
+        rp += "/"
+    if rp not in _ALLOWED_RETURN_PATHS:
+        rp = "/"  # default landing back to the new home
+
     stripe.api_key = _STRIPE_SECRET_KEY
     try:
         session = stripe.checkout.Session.create(
             mode="payment",
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{_APP_URL}/playground/?welcome=1&purchase=success",
-            cancel_url=f"{_APP_URL}/playground/?purchase=cancel",
+            success_url=f"{_APP_URL}{rp}?welcome=1&purchase=success",
+            cancel_url=f"{_APP_URL}{rp}?purchase=cancel",
             customer_email=email,
             metadata={"email": email, "package": package},
         )

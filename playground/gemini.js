@@ -23,15 +23,32 @@ export class GeminiConnection {
   }
 
   async connect(systemPrompt, tools = [], language = 'en-US') {
+    const tokenStart = performance.now();
     const resp = await fetch('/token');
     if (!resp.ok) throw new Error(`/token ${resp.status}`);
     const { token } = await resp.json();
+    console.log(`[gemini] /token fetch in ${Math.round(performance.now() - tokenStart)}ms`);
 
     return new Promise((resolve, reject) => {
+      const t0 = performance.now();
       this.ws = new WebSocket(`${GEMINI_WS}?key=${token}`);
       this.ws.binaryType = 'arraybuffer';
+      let resolved = false;
+      let opened = false;
+      // 20s ceiling. Gemini Live's setupComplete usually lands within
+      // 1-3s; pushing to 20s gives headroom for transient regional
+      // backend slowness without hanging the UI indefinitely.
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          const elapsed = Math.round(performance.now() - t0);
+          reject(new Error(`gemini setup timeout (${elapsed}ms, ws_opened=${opened})`));
+        }
+      }, 20_000);
 
+      let setupSentAt = 0;
       this.ws.onopen = () => {
+        opened = true;
+        console.log(`[gemini] ws opened in ${Math.round(performance.now() - t0)}ms`);
         const setup = {
           model: MODEL,
           generationConfig: {
@@ -49,7 +66,10 @@ export class GeminiConnection {
           sessionResumption: this.resumeHandle ? { handle: this.resumeHandle } : {},
         };
         if (tools.length) setup.tools = tools;
-        this.ws.send(JSON.stringify({ setup }));
+        const setupJson = JSON.stringify({ setup });
+        console.log(`[gemini] sending setup: model=${MODEL} bytes=${setupJson.length} prompt_chars=${systemPrompt.length} tools=${tools.length}`);
+        setupSentAt = performance.now();
+        this.ws.send(setupJson);
       };
 
       this.ws.onmessage = (e) => {
@@ -59,7 +79,15 @@ export class GeminiConnection {
         let msg;
         try { msg = JSON.parse(raw); } catch { return; }
 
-        if (msg.setupComplete != null) { resolve(); return; }
+        if (msg.setupComplete != null) {
+          resolved = true;
+          clearTimeout(timeout);
+          const totalMs = Math.round(performance.now() - t0);
+          const setupAckMs = setupSentAt ? Math.round(performance.now() - setupSentAt) : -1;
+          console.log(`[gemini] setupComplete: total=${totalMs}ms backend=${setupAckMs}ms`);
+          resolve();
+          return;
+        }
         if (msg.goAway) { this.onGoAway?.(msg.goAway.timeLeft); return; }
         if (msg.sessionResumptionUpdate?.newHandle) {
           this.resumeHandle = msg.sessionResumptionUpdate.newHandle;
@@ -93,8 +121,23 @@ export class GeminiConnection {
         if (sc.outputTranscription?.text) this.onOutputTranscript?.(sc.outputTranscription.text);
       };
 
-      this.ws.onclose = (e) => { this.onClose?.(e.code, e.reason); };
-      this.ws.onerror = () => { reject(new Error('ws error')); };
+      this.ws.onclose = (e) => {
+        // Pre-setupComplete close is an error path — reject so the
+        // activate() catch fires instead of leaving the promise dangling.
+        // After resolve, this is just the normal session-end signal.
+        if (!resolved) {
+          clearTimeout(timeout);
+          reject(new Error(`ws closed before setup (code=${e.code} reason=${e.reason || 'none'})`));
+          return;
+        }
+        this.onClose?.(e.code, e.reason);
+      };
+      this.ws.onerror = () => {
+        if (!resolved) {
+          clearTimeout(timeout);
+          reject(new Error('ws error before setup'));
+        }
+      };
     });
   }
 

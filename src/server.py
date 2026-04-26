@@ -23,6 +23,7 @@ PORT = int(os.getenv("PORT", "8000"))
 _ROOT = Path(__file__).resolve().parent.parent
 TEST_HTML = _ROOT / "test_browser" / "index.html"
 LANDING_HTML = _ROOT / "landing" / "index.html"
+HOME_HTML    = _ROOT / "preview" / "index.html"  # / serves the one-page concierge experience now
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
@@ -48,7 +49,17 @@ app = FastAPI(title="ojaq-proxy")
 
 
 @app.get("/")
-async def landing_page():
+async def home_page():
+    """Serves the concierge-led one-page experience (formerly /preview).
+    Same file is also reachable at /preview/ via the static mount, so
+    bookmarks/links to /preview/ keep working during the transition."""
+    return FileResponse(HOME_HTML, media_type="text/html")
+
+
+@app.get("/landing-old")
+async def legacy_landing():
+    """Keeps the original marketing landing reachable for reference /
+    rollback. Not linked from anywhere in the new flow."""
     return FileResponse(LANDING_HTML, media_type="text/html")
 
 
@@ -99,6 +110,11 @@ app.include_router(auth_router)
 from wallet import router as wallet_router, init_wallet
 init_wallet(wallet_dir=WALLET_DIR)
 app.include_router(wallet_router)
+
+# Hume Expression Measurement proxy — keeps the API key server-side
+# and bridges browser PCM → Hume prosody → Plutchik label → browser.
+from emotion_proxy import router as emotion_router  # noqa: E402
+app.include_router(emotion_router)
 
 # Founding Members billing — Stripe checkout + webhook → wallet credits
 from billing import router as billing_router, init_billing
@@ -422,6 +438,127 @@ async def analyze_presence(request: Request):
     return JSONResponse({"error": "all models unavailable"}, 503)
 
 
+# ── Room presence — observes the conversation flow during Concierge ──
+# Concierge is a character; THIS is the meta-intelligence that watches
+# the whole exchange and decides whether to route to a module. Lives
+# alongside the spoken conversation, never participates — it just
+# watches and acts. Same async-per-turn cadence as /analyze.
+ROOM_OBSERVE_PROMPT = """\
+You are the room observer in Ojaq. Watch the conversation between
+the user and Ojaq, classify whether a navigation event has happened.
+
+EVENTS
+
+  ROUTE — only valid when current framework is "concierge". The
+  user has agreed to enter a specific module and the module is
+  identifiable from context. Modules: coaching, selfDiscovery,
+  friend, meditation, voice, together.
+
+  END — the conversation is closing. In a module, closing is
+  mutual: if Ojaq is still asking the next question or working
+  the material with the user, the user is in session, regardless
+  of what they said.
+
+  WAIT — anything else.
+
+The user's words trigger these events. Ojaq's words can confirm
+or reject (asking the next question rejects a close), but never
+alone trigger an action.
+
+Confidence reflects clarity of the signal. Module-end requires
+≥ 0.7; concierge actions ≥ 0.4. Below the floor: return wait.
+
+OUTPUT — strict JSON, no markdown:
+  {{"action": "wait"}}
+  {{"action": "route", "module_id": "<id>", "confidence": 0.0..1.0}}
+  {{"action": "end", "confidence": 0.0..1.0}}
+
+Current framework: {current_framework}
+
+Conversation:
+{history}
+"""
+
+
+@app.post("/room/observe")
+async def room_observe(request: Request):
+    body = await request.json()
+    history = body.get("history", [])  # [{"role": "user"|"ojaq", "text": "..."}]
+    current_framework = (body.get("current_framework") or "concierge").strip()
+    if not isinstance(history, list) or not history:
+        return JSONResponse({"action": "wait"})
+
+    # Speaker label depends on whose voice we're watching. Same observer,
+    # both contexts — concierge entry routing AND module session wrap-up.
+    other_role = "Concierge" if current_framework == "concierge" else "Ojaq"
+    rendered = "\n".join(
+        f"{('User' if t.get('role') == 'user' else other_role)}: {t.get('text','').strip()}"
+        for t in history if t.get("text")
+    )
+    prompt = ROOM_OBSERVE_PROMPT.format(
+        history=rendered,
+        current_framework=current_framework,
+    )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        # temperature 0 — same dialog ALWAYS produces same decision.
+        # 0.1 had observable variance: identical "Concierge said going,
+        # user said yes" inputs returned wait on one call, route on the
+        # next. Routing is a classification, not a generation — the
+        # exploration noise costs us turn-level latency in the user's
+        # perception (one wait = one extra round of "hadi geçelim").
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
+    }
+
+    last_error = None
+    for model in _ANALYZE_MODELS:
+        try:
+            resp = await _http.post(
+                f"{_REST_BASE}{model}:generateContent?key={GEMINI_API_KEY}",
+                json=payload,
+            )
+            if resp.status_code == 503:
+                continue
+            data = resp.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            decision = json.loads(text.strip())
+            # Defensive gates — confidence floors differ by context.
+            # Concierge → route is cheap (the user explicitly came here
+            # to be routed). Module → end is expensive (false positive
+            # pulls the user out of a working session). Hence the
+            # higher bar in modules.
+            action = decision.get("action")
+            if action == "route":
+                conf = float(decision.get("confidence", 0))
+                mid = decision.get("module_id", "")
+                # Routes only valid in concierge
+                if current_framework != "concierge":
+                    return JSONResponse({"action": "wait"})
+                if conf < 0.4 or mid not in {
+                    "coaching", "selfDiscovery", "friend",
+                    "meditation", "voice", "together",
+                }:
+                    return JSONResponse({"action": "wait"})
+            elif action == "end":
+                conf = float(decision.get("confidence", 0))
+                # Higher floor in modules — pulling out mid-conversation
+                # on a false positive is the bigger cost.
+                floor = 0.7 if current_framework != "concierge" else 0.4
+                if conf < floor:
+                    return JSONResponse({"action": "wait"})
+            return JSONResponse(decision)
+        except Exception as e:
+            last_error = e
+            continue
+
+    logger.warning(f"/room/observe failed on all models: {last_error}")
+    return JSONResponse({"action": "wait"})
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
@@ -499,6 +636,12 @@ async def playground_manifest():
 
 
 app.mount("/playground", StaticFiles(directory=PLAYGROUND, html=True), name="playground")
+
+# Single-page preview prototype — landing + playground in one DOM context.
+# Production routes (/ and /playground/) untouched; /preview is a sandbox.
+PREVIEW = _ROOT / "preview"
+if PREVIEW.is_dir():
+    app.mount("/preview", StaticFiles(directory=PREVIEW, html=True), name="preview")
 
 
 if __name__ == "__main__":

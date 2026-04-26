@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ojaq — Preview</title>
+<meta name="description" content="An intelligence that listens beneath your words.">
+<link rel="stylesheet" href="/preview/style.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+
+<header class="nav">
+  <a href="/" class="brand">Ojaq</a>
+  <div id="account-chip" class="hidden">
+    <button type="button" id="account-btn"><span id="account-label">Sign in</span></button>
+    <div id="account-menu">
+      <p id="account-menu-email"></p>
+      <p id="account-menu-credits"></p>
+      <button type="button" id="account-signout">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<!-- ── login modal (hidden until "Sign in" clicked) ── -->
+<div id="login-modal" style="display:none">
+  <div id="login-inner">
+    <p id="login-title">Continue with Ojaq</p>
+    <p id="login-sub">We'll email you a link.</p>
+    <div id="login-form">
+      <div class="reflect-input-row">
+        <input type="email" id="login-email" placeholder="your@email.com">
+        <button type="button" id="login-submit" class="reflect-submit">Send link</button>
+      </div>
+      <p id="login-note"></p>
+    </div>
+    <div id="login-sent" style="display:none">
+      <p id="login-sent-msg">Check your email.</p>
+    </div>
+    <button type="button" id="login-close">Close</button>
+  </div>
+</div>
+
+<!-- ── paywall modal (dormant in /preview — packs link to /playground for now) ── -->
+<div id="paywall-modal" style="display:none">
+  <div id="paywall-inner">
+    <p id="paywall-title">Continue with Ojaq</p>
+    <p id="paywall-sub">Choose a pack.</p>
+    <div id="paywall-packages">
+      <button type="button" class="paywall-pkg" data-package="starter">
+        <span class="pkg-name">Starter</span>
+        <span class="pkg-price">$29</span>
+        <span class="pkg-desc">10 sessions</span>
+      </button>
+      <button type="button" class="paywall-pkg" data-package="ritual">
+        <span class="pkg-name">Ritual</span>
+        <span class="pkg-price">$79</span>
+        <span class="pkg-desc">30 sessions</span>
+      </button>
+      <button type="button" class="paywall-pkg" data-package="evergreen">
+        <span class="pkg-name">Evergreen</span>
+        <span class="pkg-price">$199 / year</span>
+        <span class="pkg-desc">Unlimited sessions</span>
+      </button>
+    </div>
+    <p id="paywall-login-cta" style="display:none">
+      Already have credits? <button type="button" id="paywall-login-link">Sign in</button>
+    </p>
+    <button type="button" id="paywall-close">Close</button>
+  </div>
+</div>
+
+<main class="hero">
+  <div class="orb-backdrop">
+    <canvas id="orb-canvas"></canvas>
+  </div>
+  <div class="hero-content">
+    <h1 class="hero-title">An intelligence that listens <em>beneath</em> your words.</h1>
+    <button id="enter-btn" class="enter-btn" type="button">Enter</button>
+  </div>
+</main>
+
+<!-- Module navigation rail — visible during Concierge session.
+     Click a chip OR let Concierge route you via voice. Same id pattern
+     as the framework keys; preview.js routes via [CMD:open:<id>]. -->
+<aside id="modules-nav" aria-label="Modules">
+  <div class="modules-nav-header">Modules</div>
+  <button class="module-chip" data-framework="coaching"     type="button">Coaching</button>
+  <button class="module-chip" data-framework="selfDiscovery" type="button">Self-Discovery</button>
+  <button class="module-chip" data-framework="friend"        type="button">Friend</button>
+  <button class="module-chip" data-framework="meditation"    type="button">Meditation</button>
+  <button class="module-chip" data-framework="voice"         type="button">Voice</button>
+  <button class="module-chip" data-framework="together"      type="button">Together</button>
+</aside>
+
+<!-- Left rail — visible only during active session.
+     Header pill shows the current character; modality buttons below are
+     rendered dynamically per character (each character has its own DSL —
+     Coach offers life domains, Meditation offers practice forms, etc.). -->
+<aside id="topics" aria-label="Session controls">
+  <div class="topics-header" id="topics-header"></div>
+  <div id="modalities-list"></div>
+</aside>
+
+<!-- Mobile-only orientation cue — character name pinned near the top
+     of the screen during a session. Hidden above 600px (the rail's
+     pill does the same job there). -->
+<div class="mobile-character-pill" id="mobile-character-pill"></div>
+
+<!-- Live transcripts — visible only while session is active -->
+<div id="transcripts">
+  <p class="t-line you" id="t-user"></p>
+  <p class="t-line ojaq" id="t-model"></p>
+</div>
+
+<button id="end-session" class="end-btn" type="button">Done</button>
+
+<!-- Post-session reflection — fades in 2s after End -->
+<div class="reflection" id="reflection">
+  <!-- Session summary: latest presence signal + duration. Both hidden when empty. -->
+  <p class="reflect-signal" id="reflect-signal"></p>
+  <p class="reflect-duration" id="reflect-duration"></p>
+  <p class="reflect-line" id="reflect-line">Carry this with you.</p>
+  <form class="reflect-form" id="reflect-form">
+    <input type="email" id="reflect-email" placeholder="your@email.com" required autocomplete="email">
+    <button type="submit" class="reflect-submit">Save</button>
+  </form>
+  <div class="reflect-actions">
+    <button type="button" class="reflect-tertiary" id="reflect-tertiary">Start another</button>
+    <span class="reflect-divider" aria-hidden="true">·</span>
+    <button type="button" class="reflect-tertiary" id="reflect-concierge">Talk to concierge</button>
+    <span class="reflect-divider" aria-hidden="true">·</span>
+    <button type="button" class="reflect-tertiary" id="reflect-home">Back to home</button>
+  </div>
+</div>
+
+<div class="editorial">
+  <section class="section">
+    <p class="kicker">What happens here</p>
+    <h2>One room. One voice that listens. Many ways to be met.</h2>
+    <p>You arrive. A concierge greets you — one voice, listening for what's alive in what you bring. No menus to navigate, no settings to choose. Just a short exchange about what you need.</p>
+    <p>From there, you're taken to the room that fits — <strong>coaching when you're untangling something, a mirror when you need to be seen, a friend when you just want to talk, a practice when you want to settle, a witness when there are two of you.</strong></p>
+    <p>When it speaks back, it's rarely and precisely. One sentence. Two at most. Only reflections so accurate they feel uncanny.</p>
+  </section>
+
+  <section class="section">
+    <p class="kicker">The constant</p>
+    <h2>Different rooms. One mirror.</h2>
+  </section>
+
+  <section class="section">
+    <p class="kicker">Coming next</p>
+    <h2>It will remember.</h2>
+  </section>
+
+  <section class="section">
+    <p class="kicker">Continue with Ojaq</p>
+    <h2>Choose a pack.</h2>
+    <div class="packs">
+      <a class="pack" href="/playground" data-package="starter">
+        <div class="pack-name">Starter</div>
+        <div class="pack-price">$29</div>
+        <div class="pack-amount">10 sessions</div>
+        <p class="pack-desc">Ephemeral by design — nothing saved, nothing kept. Begin where you are.</p>
+      </a>
+      <a class="pack" href="/playground" data-package="ritual">
+        <div class="pack-name">Ritual</div>
+        <div class="pack-price">$79</div>
+        <div class="pack-amount">30 sessions</div>
+        <p class="pack-desc">For the conversations you return to. A practice, not a product.</p>
+      </a>
+      <a class="pack" href="/playground" data-package="evergreen">
+        <div class="pack-name">Evergreen</div>
+        <div class="pack-price">$199 / year</div>
+        <div class="pack-amount">Unlimited sessions</div>
+        <p class="pack-desc">For when Ojaq becomes part of how you think.</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="section waitlist-section">
+    <h3 class="waitlist-heading">Be the first to know when Ojaq comes to mobile.</h3>
+    <form class="waitlist-form" id="waitlist-form">
+      <input type="email" placeholder="your@email.com" required id="waitlist-email">
+      <button type="submit">Notify me</button>
+    </form>
+    <p class="waitlist-note" id="waitlist-note">No spam. One email when it's ready.</p>
+  </section>
+</div>
+
+<footer>
+  Ojaq &nbsp;&middot;&nbsp; <a href="/privacy">Nothing kept</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms</a> &nbsp;&middot;&nbsp; <a href="/privacy">Privacy</a>
+</footer>
+
+<script type="module" src="/preview/preview.js"></script>
+</body>
+</html>
