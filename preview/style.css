@@ -662,6 +662,19 @@ body.reflection-visible .reflection {
   font-weight: 400;
 }
 
+.dialog {
+  margin-bottom: 32px;
+}
+.dialog p {
+  font-size: 17px;
+  font-weight: 300;
+  line-height: 1.6;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+.dialog .d-you { color: var(--muted); }
+.dialog .d-ojaq { color: var(--text); }
+
 /* ── packs (Founding Members) ────────────────────────────────────────── */
 .packs {
   display: grid;
