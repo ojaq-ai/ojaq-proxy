@@ -474,35 +474,22 @@ DECISION SHAPES
   If you cannot identify which specific module the user is
   agreeing to, return wait — the user needs to be asked.
 
-  END — valid in any framework. Pulling a user out mid-conversation
-  is the most expensive false positive in this system. End requires
-  TWO concurrent signals, not one:
+  END requires BOTH:
+    (a) The user's most recent turn is closing-shaped: gratitude,
+        goodbye, "I'm good", a settled wrap-up. Goodbyes — even
+        short ones (bye, görüşürüz, take care) — count.
+    (b) Ojaq's most recent turn closes the work: warm acknowledgment,
+        goodbye, summary — NOT asking the next question or pushing
+        deeper.
 
-  In concierge:
-    (a) The user's most recent turn is an unambiguous close —
-        gratitude, soft goodbye, "I'm done for now", summary-shaped.
-    AND
-    (b) Ojaq's most recent turn acknowledges the close, not opens
-        a new question or invitation.
+  Both present → end. Either absent → wait.
 
-  In a module:
-    Same two-signal rule, with extra care:
-    (a) The user's most recent turn must be SESSION-CLOSING in shape:
-        gratitude, "this was helpful", "I think I'm good for now",
-        a settled goodbye. NOT a decisive content statement
-        ("Yes I'll do that"), NOT a confident answer to a coaching
-        question, NOT a moment of insight. Decisive language inside
-        the work is not closure — it's progress.
-    AND
-    (b) Ojaq's most recent turn closes too — saying goodbye, warm
-        acknowledgment, no further question or push deeper. If Ojaq
-        is asking the next question, the session is continuing
-        regardless of what the user just said.
-
-  When in doubt about whether a user statement is closing or
-  in-the-work, return wait. The user can press the Done button
-  if they actually meant to leave; the cost of waiting one more
-  turn is low. The cost of pulling them out wrongly is high.
+  Content-decisive statements inside the work ("Yes I'll do that",
+  "I see what you mean") are NOT closing — they're progress through
+  the session. Explicit closers (goodbyes, gratitude, "yeter")
+  ARE closing — including short ones. The Ojaq side check is what
+  disambiguates: if Ojaq is asking the next question, the session
+  is continuing regardless of what the user said.
 
   WAIT — the default. Anything that isn't unambiguous user assent
   or closure: keep waiting. Questions, hesitation, vague gestures,
