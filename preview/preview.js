@@ -77,9 +77,11 @@ let _lastEmotionLabel = null;
 // Applied at the next turnComplete so the concierge's closing line
 // has time to land before we tear down.
 let _pendingTransition = null;
-// Rolling dialog history fed to the room presence observer. Cleared
-// when a session ends or hands off.
-let _conciergeHistory = [];
+// Rolling per-session dialog history fed to the room observer. The
+// observer watches EVERY framework now, not just Concierge — modules
+// also get observed so the user can wrap up by voice without needing
+// to press the Done button. History is reset on each activate().
+let _sessionHistory = [];
 
 // Idle preset: low energy + low engagement keep the orb's drift slow and
 // meditative. The hero shouldn't feel like a busy screensaver while users
@@ -186,7 +188,7 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching', contextSni
     _smoothedPresence = null;
     lastSignal = '';
     sessionStartedAt = Date.now();
-    _conciergeHistory = [];
+    _sessionHistory = [];
     avatar.setMode('reflect');
     avatar.setPresence(SESSION_START_PRESENCE);
     if ($topicsHeader) $topicsHeader.textContent = framework.name;
@@ -231,11 +233,14 @@ async function activate(frameworkId = _lastFrameworkId || 'coaching', contextSni
       // Async presence — never blocks the audio path
       const u = lastUserText, m = lastModelText;
       if (u) analyzePresence(u, m);
-      // Build dialog history for room observer (concierge only)
-      if (framework.id === 'concierge' && u) {
-        _conciergeHistory.push({ role: 'user', text: u });
-        if (m) _conciergeHistory.push({ role: 'ojaq', text: m });
-        observeRoom(_conciergeHistory.slice(-12));  // last 12 turns
+      // Build dialog history + observe across EVERY framework now.
+      // Modules also get watched so the user can wrap up by voice
+      // ("tamam, yeter") without pressing Done. The observer adapts
+      // to current framework — see ROOM_OBSERVE_PROMPT for rules.
+      if (u) {
+        _sessionHistory.push({ role: 'user', text: u });
+        if (m) _sessionHistory.push({ role: 'ojaq', text: m });
+        observeRoom(_sessionHistory.slice(-12), framework.id);
       }
       lastUserText = '';
       lastModelText = '';
@@ -365,18 +370,21 @@ function blendPresence(newP) {
 // Uses module-level _lastFrameworkId rather than the activate() closure
 // `framework` because observeRoom is defined at module scope; the
 // closure variable isn't in its lexical scope.
-async function observeRoom(history) {
-  if (state !== 'active' || _lastFrameworkId !== 'concierge') return;
-  // Diagnostic — dump the last 2 turns the observer is actually seeing
+async function observeRoom(history, currentFrameworkId) {
+  if (state !== 'active') return;
+  // Stale-call guard — _lastFrameworkId may have shifted since this
+  // call started; if so, the result no longer applies.
+  if (currentFrameworkId !== _lastFrameworkId) return;
+  // Diagnostic — dump the last few turns the observer is actually seeing
   const recent = history.slice(-4).map(t =>
-    `${t.role === 'user' ? 'U' : 'C'}:${(t.text || '').slice(0, 60)}`
+    `${t.role === 'user' ? 'U' : 'O'}:${(t.text || '').slice(0, 60)}`
   ).join(' | ');
-  log(`observe -> ${recent}`);
+  log(`observe (${currentFrameworkId}) -> ${recent}`);
   try {
     const r = await fetch('/room/observe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ history }),
+      body: JSON.stringify({ history, current_framework: currentFrameworkId }),
     });
     if (!r.ok) {
       log(`observe http ${r.status}`);
@@ -391,7 +399,15 @@ async function observeRoom(history) {
     } else if (d?.action === 'end') {
       const conf = (d.confidence ?? 0).toFixed(2);
       log(`room presence: end (conf=${conf})`);
-      returnToLanding();
+      // End semantics depend on context:
+      //   - In Concierge: user is wrapping up the whole visit → landing
+      //   - In a module: user is wrapping up THIS session → flow back
+      //     to Concierge (which will greet "how did that land?")
+      if (currentFrameworkId === 'concierge') {
+        returnToLanding();
+      } else {
+        endSession();
+      }
     } else if (d?.action === 'wait') {
       log('room presence: wait');
     } else {
@@ -517,12 +533,12 @@ async function handoffTo(targetFrameworkId, customContext = null) {
   // Context priority:
   //   1. customContext (explicit) — used when ending a module and
   //      handing back to the Concierge with a session summary.
-  //   2. _conciergeHistory tail — used when going FROM concierge TO
+  //   2. _sessionHistory tail — used when going FROM concierge TO
   //      a module so the module picks up the thread.
   //   3. None — first activation, or a chip-click bypassing concierge.
   let contextSnippet = customContext || '';
-  if (!contextSnippet && fromId === 'concierge' && _conciergeHistory.length) {
-    contextSnippet = _conciergeHistory.slice(-6).map(t =>
+  if (!contextSnippet && fromId === 'concierge' && _sessionHistory.length) {
+    contextSnippet = _sessionHistory.slice(-6).map(t =>
       `${t.role === 'user' ? 'User' : 'Concierge'}: ${t.text}`
     ).join('\n');
   }

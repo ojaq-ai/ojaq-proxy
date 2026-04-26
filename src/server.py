@@ -433,11 +433,12 @@ async def analyze_presence(request: Request):
 # alongside the spoken conversation, never participates — it just
 # watches and acts. Same async-per-turn cadence as /analyze.
 ROOM_OBSERVE_PROMPT = """\
-You are the routing detector for Ojaq's entry room. The user is talking
-with the Concierge. Your sole job: classify whether the conversation
-has reached a routing decision yet.
+You are the room observer for Ojaq. You watch the live conversation
+and classify whether a navigation decision has been reached.
 
-Modules:
+Current framework: {current_framework}
+
+Available modules (only relevant when in concierge):
   coaching      — thinking through decisions, change, work, next steps
   selfDiscovery — being mirrored without advice; observation, not direction
   friend        — casual venting, decompressing, being together
@@ -448,27 +449,38 @@ Modules:
 Conversation so far (chronological):
 {history}
 
-A decision has been reached in one of these shapes:
+DECISION SHAPES
 
-  ROUTE — the user has assented to entering a specific module (in
-  any language, any phrasing), OR the Concierge has stated it is
+  ROUTE — only valid when current framework is "concierge".
+  Fires when the user has assented to entering a specific module
+  (any language, any phrasing), OR the Concierge has stated it is
   transitioning the user.
 
-  END — the user has indicated they're done for now (in any
-  language: "I'm good", "that's all", "tamam", "yeter", "kapatalım",
-  a soft goodbye, etc.) AND the Concierge has acknowledged it
-  rather than offered another module. This usually happens after
-  the user has just finished a module session.
+  END — valid in any framework.
+  In concierge: the user has indicated they're done ("I'm good",
+  "tamam, yeter", soft goodbye) AND the Concierge has acknowledged
+  rather than offered another module.
+  In a module: the user has signaled the session itself is
+  complete — closing-shaped utterances ("thanks, that helps",
+  "I think I'm good for now", "tamam bu kadar", a settled goodbye)
+  that fit the END of work, not a mid-session pause. The module
+  may also acknowledge with closing language. The user will be
+  handed back to the Concierge after END, so this is "wrap up the
+  current module", not "exit the entire system".
 
-  WAIT — anything else: still exploring, asking, vague, or no
-  response yet.
+  WAIT — anything else: still exploring, asking, working, mid-
+  thought, no response yet.
 
-Confidence reflects how unambiguous the agreement is, not how
-willing you are to act. Strong explicit assent: 0.85+. Implied or
-short assent: 0.55-0.85. Below 0.4 means you don't actually have
-agreement — return wait.
+Confidence reflects how unambiguous the signal is, not how willing
+you are to act. Strong explicit signal: 0.85+. Implied or short:
+0.55-0.85. Below 0.4: don't actually have it — return wait.
 
-You are not a brake. When the agreement is clear, route. The
+In a module session, BE CAREFUL with end — pulling a user out of
+a working session on a false positive is expensive. Only return
+end with conf ≥ 0.7 when it's clearly a session-closing exchange
+and not just a mid-conversation pause.
+
+In concierge, the bar is lower — you ARE the navigation, the
 Concierge depends on you to fire.
 
 OUTPUT — strict JSON, no markdown, no commentary:
@@ -482,16 +494,21 @@ OUTPUT — strict JSON, no markdown, no commentary:
 async def room_observe(request: Request):
     body = await request.json()
     history = body.get("history", [])  # [{"role": "user"|"ojaq", "text": "..."}]
+    current_framework = (body.get("current_framework") or "concierge").strip()
     if not isinstance(history, list) or not history:
         return JSONResponse({"action": "wait"})
 
-    # Render history as plain dialog so the LLM doesn't need to
-    # interpret JSON — speech-shaped text is what it's good at.
+    # Speaker label depends on whose voice we're watching. Same observer,
+    # both contexts — concierge entry routing AND module session wrap-up.
+    other_role = "Concierge" if current_framework == "concierge" else "Ojaq"
     rendered = "\n".join(
-        f"{('User' if t.get('role') == 'user' else 'Concierge')}: {t.get('text','').strip()}"
+        f"{('User' if t.get('role') == 'user' else other_role)}: {t.get('text','').strip()}"
         for t in history if t.get("text")
     )
-    prompt = ROOM_OBSERVE_PROMPT.format(history=rendered)
+    prompt = ROOM_OBSERVE_PROMPT.format(
+        history=rendered,
+        current_framework=current_framework,
+    )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         # temperature 0 — same dialog ALWAYS produces same decision.
@@ -519,13 +536,18 @@ async def room_observe(request: Request):
             if text.endswith("```"):
                 text = text[:-3]
             decision = json.loads(text.strip())
-            # Defensive gates — anything below 0.4 confidence collapses
-            # to wait, no matter the action label, so the routing/ending
-            # action only fires on clear signal.
+            # Defensive gates — confidence floors differ by context.
+            # Concierge → route is cheap (the user explicitly came here
+            # to be routed). Module → end is expensive (false positive
+            # pulls the user out of a working session). Hence the
+            # higher bar in modules.
             action = decision.get("action")
             if action == "route":
                 conf = float(decision.get("confidence", 0))
                 mid = decision.get("module_id", "")
+                # Routes only valid in concierge
+                if current_framework != "concierge":
+                    return JSONResponse({"action": "wait"})
                 if conf < 0.4 or mid not in {
                     "coaching", "selfDiscovery", "friend",
                     "meditation", "voice", "together",
@@ -533,7 +555,10 @@ async def room_observe(request: Request):
                     return JSONResponse({"action": "wait"})
             elif action == "end":
                 conf = float(decision.get("confidence", 0))
-                if conf < 0.4:
+                # Higher floor in modules — pulling out mid-conversation
+                # on a false positive is the bigger cost.
+                floor = 0.7 if current_framework != "concierge" else 0.4
+                if conf < floor:
                     return JSONResponse({"action": "wait"})
             return JSONResponse(decision)
         except Exception as e:
