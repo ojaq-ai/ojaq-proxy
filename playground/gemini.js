@@ -23,9 +23,11 @@ export class GeminiConnection {
   }
 
   async connect(systemPrompt, tools = [], language = 'en-US') {
+    const tokenStart = performance.now();
     const resp = await fetch('/token');
     if (!resp.ok) throw new Error(`/token ${resp.status}`);
     const { token } = await resp.json();
+    console.log(`[gemini] /token fetch in ${Math.round(performance.now() - tokenStart)}ms`);
 
     return new Promise((resolve, reject) => {
       const t0 = performance.now();
@@ -43,6 +45,7 @@ export class GeminiConnection {
         }
       }, 20_000);
 
+      let setupSentAt = 0;
       this.ws.onopen = () => {
         opened = true;
         console.log(`[gemini] ws opened in ${Math.round(performance.now() - t0)}ms`);
@@ -64,7 +67,8 @@ export class GeminiConnection {
         };
         if (tools.length) setup.tools = tools;
         const setupJson = JSON.stringify({ setup });
-        console.log(`[gemini] sending setup (${setupJson.length} bytes, prompt=${systemPrompt.length} chars)`);
+        console.log(`[gemini] sending setup: model=${MODEL} bytes=${setupJson.length} prompt_chars=${systemPrompt.length} tools=${tools.length}`);
+        setupSentAt = performance.now();
         this.ws.send(setupJson);
       };
 
@@ -78,7 +82,9 @@ export class GeminiConnection {
         if (msg.setupComplete != null) {
           resolved = true;
           clearTimeout(timeout);
-          console.log(`[gemini] setupComplete in ${Math.round(performance.now() - t0)}ms`);
+          const totalMs = Math.round(performance.now() - t0);
+          const setupAckMs = setupSentAt ? Math.round(performance.now() - setupSentAt) : -1;
+          console.log(`[gemini] setupComplete: total=${totalMs}ms backend=${setupAckMs}ms`);
           resolve();
           return;
         }
