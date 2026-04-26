@@ -30,6 +30,13 @@ export class GeminiConnection {
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(`${GEMINI_WS}?key=${token}`);
       this.ws.binaryType = 'arraybuffer';
+      let resolved = false;
+      // Hard timeout — if neither onopen nor onmessage delivers
+      // setupComplete within 10s, surface as an error instead of
+      // hanging the activate() flow indefinitely.
+      const timeout = setTimeout(() => {
+        if (!resolved) reject(new Error('gemini setup timeout (10s)'));
+      }, 10_000);
 
       this.ws.onopen = () => {
         const setup = {
@@ -59,7 +66,12 @@ export class GeminiConnection {
         let msg;
         try { msg = JSON.parse(raw); } catch { return; }
 
-        if (msg.setupComplete != null) { resolve(); return; }
+        if (msg.setupComplete != null) {
+          resolved = true;
+          clearTimeout(timeout);
+          resolve();
+          return;
+        }
         if (msg.goAway) { this.onGoAway?.(msg.goAway.timeLeft); return; }
         if (msg.sessionResumptionUpdate?.newHandle) {
           this.resumeHandle = msg.sessionResumptionUpdate.newHandle;
@@ -93,8 +105,23 @@ export class GeminiConnection {
         if (sc.outputTranscription?.text) this.onOutputTranscript?.(sc.outputTranscription.text);
       };
 
-      this.ws.onclose = (e) => { this.onClose?.(e.code, e.reason); };
-      this.ws.onerror = () => { reject(new Error('ws error')); };
+      this.ws.onclose = (e) => {
+        // Pre-setupComplete close is an error path — reject so the
+        // activate() catch fires instead of leaving the promise dangling.
+        // After resolve, this is just the normal session-end signal.
+        if (!resolved) {
+          clearTimeout(timeout);
+          reject(new Error(`ws closed before setup (code=${e.code} reason=${e.reason || 'none'})`));
+          return;
+        }
+        this.onClose?.(e.code, e.reason);
+      };
+      this.ws.onerror = () => {
+        if (!resolved) {
+          clearTimeout(timeout);
+          reject(new Error('ws error before setup'));
+        }
+      };
     });
   }
 
